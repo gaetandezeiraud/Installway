@@ -35,7 +35,26 @@ pub fn finalize(
     #[cfg(windows)]
     register_uninstall(&info, &uninstaller_path)?;
 
+    if !payload.manifest.exe.is_empty() {
+        let target = install_dir.join(&payload.manifest.exe);
+        create_shortcuts(&payload.product, install_dir, &target);
+    }
+
     Ok(())
+}
+
+/// Drop a desktop and a Start Menu shortcut pointing at the installed exe.
+/// Mirrors the launcher's pattern (`mslnk` + `dirs`); paths come from `common::shortcuts`.
+pub fn create_shortcuts(product: &str, install_dir: &Path, target: &Path) {
+    for path in common::shortcuts::paths_for(product) {
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        if let Ok(mut lnk) = mslnk::ShellLink::new(target.to_string_lossy().as_ref()) {
+            lnk.set_working_dir(Some(install_dir.to_string_lossy().into_owned()));
+            let _ = lnk.create_lnk(&path);
+        }
+    }
 }
 
 /// Sanitize product name for registry-key use.

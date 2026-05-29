@@ -171,10 +171,21 @@ Controls v6 visual styles, Segoe UI, DPI-aware `PerMonitorV2`, `asInvoker`
 manifest. Deliberate choice: zero runtime dependencies, every supported
 Windows version works, ~860 KB stub.
 
+## Shortcuts
+
+If the payload `manifest.exe` is non-empty, the installer drops two `.lnk`
+files per user (no admin needed) pointing at `<install_dir>\<exe>`:
+
+- `%APPDATA%\Microsoft\Windows\Start Menu\Programs\<product>.lnk`
+- `%USERPROFILE%\Desktop\<product>.lnk`
+
+Same code path as the launcher (`mslnk::ShellLink`). Both are removed by the
+uninstaller. Path logic lives in `common::shortcuts` so installer and
+uninstaller never drift apart on file naming.
+
 ## Limitations / V1 scope
 
 - Windows only.
-- No automatic shortcut / start-menu entry yet (V2).
 - No GUI folder picker on Windows < 7 (we use modern `IFileOpenDialog`).
 - English-only UI.
 - License text is a placeholder (lorem ipsum); the build tool does not yet

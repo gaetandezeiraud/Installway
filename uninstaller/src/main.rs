@@ -25,6 +25,7 @@ fn run() -> Result<()> {
     }
 
     let removed = remove_files(&install_dir, &manifest);
+    remove_shortcuts(&info.product);
     let _ = remove_empty_dirs(&install_dir);
 
     #[cfg(windows)]
@@ -82,6 +83,14 @@ fn remove_files(install_dir: &Path, manifest: &Manifest) -> usize {
         }
     }
     count
+}
+
+fn remove_shortcuts(product: &str) {
+    for p in common::shortcuts::paths_for(product) {
+        if p.exists() {
+            let _ = fs::remove_file(&p);
+        }
+    }
 }
 
 fn remove_empty_dirs(install_dir: &Path) -> Result<()> {
