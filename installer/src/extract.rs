@@ -65,6 +65,8 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
     fs::create_dir_all(&ctx.install_dir)
         .with_context(|| format!("create {}", ctx.install_dir.display()))?;
 
+    check_disk_space(&ctx.install_dir, manifest, ctx.payload.kind)?;
+
     let temp_dir = ctx.install_dir.join(".installer_tmp");
     fs::create_dir_all(&temp_dir)?;
 
@@ -200,6 +202,71 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
 
     (ctx.on_progress)(total_bytes, total_bytes, "done");
     Ok(())
+}
+
+/// Safety margin on top of the estimated payload size.
+const SPACE_BUFFER: u64 = 100 * 1024 * 1024; // 100 MB
+
+/// Verify the install volume has enough free space before writing anything.
+/// Bails with a human-readable message (also logged) when short.
+fn check_disk_space(install_dir: &Path, manifest: &Manifest, kind: PayloadKind) -> Result<()> {
+    let total_file_bytes: u64 = manifest.files.values().map(|e| e.size).sum();
+    let largest_file: u64 = manifest.files.values().map(|e| e.size).max().unwrap_or(0);
+
+    // Fresh install needs room for every file. A patch keeps the existing
+    // files in place and only stages changed files one at a time in
+    // `.installer_tmp/`, so the peak extra usage is the patch payload plus the
+    // single largest output file.
+    let required = match kind {
+        PayloadKind::Full => total_file_bytes.saturating_add(SPACE_BUFFER),
+        PayloadKind::Patch => manifest
+            .total_patch_size
+            .saturating_add(largest_file)
+            .saturating_add(SPACE_BUFFER),
+    };
+
+    let available = fs4::available_space(install_dir)
+        .with_context(|| format!("query free space on {}", install_dir.display()))?;
+
+    common::log::info(format!(
+        "disk space: required ~{} ({}), available {} on {}",
+        human_bytes(required),
+        match kind {
+            PayloadKind::Full => "full",
+            PayloadKind::Patch => "patch",
+        },
+        human_bytes(available),
+        install_dir.display()
+    ));
+
+    if available < required {
+        common::log::error(format!(
+            "insufficient disk space: need {} but only {} free",
+            human_bytes(required),
+            human_bytes(available)
+        ));
+        bail!(
+            "Not enough disk space. Need about {} free on the install drive, but only {} is available.",
+            human_bytes(required),
+            human_bytes(available)
+        );
+    }
+    Ok(())
+}
+
+fn human_bytes(b: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+    if b >= GB {
+        format!("{:.2} GB", b as f64 / GB as f64)
+    } else if b >= MB {
+        format!("{:.1} MB", b as f64 / MB as f64)
+    } else if b >= KB {
+        format!("{:.1} KB", b as f64 / KB as f64)
+    } else {
+        format!("{} B", b)
+    }
 }
 
 fn read_from_zip(archive: &mut ZipArchive<Cursor<&[u8]>>, rel: &str) -> Result<Vec<u8>> {

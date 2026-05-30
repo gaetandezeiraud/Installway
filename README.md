@@ -222,6 +222,27 @@ uninstaller never drift apart on file naming.
 
 - Windows only.
 - No GUI folder picker on Windows < 7 (we use modern `IFileOpenDialog`).
+## Disk space pre-check
+
+Before writing a single byte the installer queries free space on the chosen
+install volume (`fs4::available_space`) and refuses to start if short. The
+estimate depends on the payload kind:
+
+| Kind | Required estimate |
+|---|---|
+| Full | sum of all file sizes + 100 MB buffer |
+| Patch | total patch size + largest single file + 100 MB buffer |
+
+The patch estimate is smaller because existing files stay in place; only
+changed files are staged one at a time in `.installer_tmp/`. On failure the
+installer bails with a human-readable message (shown in the UI / printed in
+silent mode) and logs the figures:
+
+```
+INFO  disk space: required ~100.3 MB (full), available 156.20 GB on C:\…\install_target
+ERROR insufficient disk space: need 2.10 GB but only 512.0 MB free
+```
+
 ## Log files
 
 Every install and uninstall writes a timestamped UTC log so failures in the

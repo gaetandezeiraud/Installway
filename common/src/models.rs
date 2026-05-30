@@ -30,7 +30,7 @@ pub struct PatchInfo {
     pub size: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PayloadKind {
     Full,
     Patch,
