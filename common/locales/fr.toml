@@ -21,6 +21,9 @@ msg_caption = "Programme d'installation"
 err_browser = "Impossible d'ouvrir le sélecteur de dossier. Saisissez le chemin manuellement."
 fatal_caption = "Erreur d'installation"
 err_prefix = "Erreur : "
+minimal_title = "Application de la mise à jour"
+minimal_sub = "{product} {version}"
+minimal_done = "Mise à jour terminée"
 
 [uninstall]
 title = "Désinstaller {product}"

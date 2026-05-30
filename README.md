@@ -107,6 +107,33 @@ Double-click the `.exe`. The wizard walks through:
 No admin elevation (manifest declares `asInvoker`). Segoe UI font, Common
 Controls v6 visual styles, DPI-aware (`PerMonitorV2`).
 
+### Minimal (app-triggered self-update)
+
+```pwsh
+.\setup-myapp-1.1.exe --minimal "C:\path\to\install"
+.\setup-myapp-1.1.exe --minimal "C:\path\to\install" --launch
+```
+
+Compact windowed UI for updates the app launches itself. **No license page, no
+folder picker, no Install button** — it starts the moment it opens and just
+shows progress:
+
+```text
+┌────────────────────────────────────────────┐
+│  ██      Applying update                    │
+│  ██      MyApp 1.1                          │
+│          [██████████░░░░░░░]  62%           │
+│          Updating bin/app.exe               │
+└────────────────────────────────────────────┘
+```
+
+App icon on the left (extracted from the installer's own embedded icon), title
++ version + progress bar + current-file status on the right. Closes itself
+~0.9 s after reaching 100 %; on error it stays open with the message. Same
+data-safe pre-flight as every install (closes the running app first, disk
+check, etc.). Path resolves from the argument, `RUSTINSTALLER_PATH`, or the
+default install dir. Implementation: [installer/src/ui_minimal.rs](installer/src/ui_minimal.rs).
+
 ### Silent (`/S` style, IT-friendly)
 
 ```pwsh

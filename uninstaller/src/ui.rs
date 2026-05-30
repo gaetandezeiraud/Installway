@@ -184,8 +184,7 @@ pub fn run(params: UninstallParams) -> bool {
                     .map(|st| st.borrow().yes_clicked)
                     .unwrap_or(false)
             });
-            if started && worker_holder.is_some() {
-                let w = worker_holder.take().unwrap();
+            if started && let Some(w) = worker_holder.take() {
                 thread::spawn(move || {
                     let progress: Arc<dyn Fn(u64, u64, &str) + Send + Sync> = Arc::new(
                         move |done, total, name| {

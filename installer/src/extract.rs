@@ -91,18 +91,19 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
     let mut archive =
         ZipArchive::new(Cursor::new(ctx.zip_bytes)).context("open embedded zip")?;
 
-    // Deterministic order — easier UX and reproducible.
-    let mut rels: Vec<&String> = manifest.files.keys().collect();
-    rels.sort();
+    // Deterministic order — easier UX and reproducible. Iterate (rel, entry)
+    // pairs directly so there's no fallible second lookup.
+    let mut entries: Vec<(&String, &common::models::FileEntry)> =
+        manifest.files.iter().collect();
+    entries.sort_by(|a, b| a.0.cmp(b.0));
 
-    for rel in rels {
+    for (rel, entry) in entries {
         if ctx.cancel.load(Ordering::Relaxed) {
             common::log::warn("install cancelled by user");
             cleanup(&temp_dir);
             bail!("cancelled by user");
         }
 
-        let entry = manifest.files.get(rel).unwrap();
         let dest = ctx.install_dir.join(rel);
         (ctx.on_progress)(done.load(Ordering::Relaxed), total_bytes, rel);
 

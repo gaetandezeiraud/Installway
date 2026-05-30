@@ -809,8 +809,14 @@ unsafe fn on_install(hwnd: HWND) {
 
     unsafe { apply_phase(hwnd, Phase::Progress) };
 
-    let cancel = STATE.with(|s| s.borrow().as_ref().map(|st| st.borrow().cancel.clone()).unwrap());
-    let progress_shared = STATE.with(|s| s.borrow().as_ref().map(|st| st.borrow().progress.clone()).unwrap());
+    let shared = STATE.with(|s| {
+        s.borrow()
+            .as_ref()
+            .map(|st| (st.borrow().cancel.clone(), st.borrow().progress.clone()))
+    });
+    let Some((cancel, progress_shared)) = shared else {
+        return; // STATE not initialized — nothing to do.
+    };
     let hwnd_isize = hwnd.0 as isize;
 
     thread::spawn(move || {

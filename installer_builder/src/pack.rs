@@ -36,7 +36,10 @@ pub fn run(args: &PackArgs) -> Result<()> {
     let zip_bytes;
     let manifest;
     if is_patch {
-        let from_dir = args.from_dir.as_ref().unwrap();
+        let from_dir = args
+            .from_dir
+            .as_ref()
+            .context("patch mode requires --from-dir")?;
         (zip_bytes, manifest) = build_patch(&args.input, from_dir, &args.exe, &args.to_version)?;
     } else {
         (zip_bytes, manifest) = build_full(&args.input, &args.exe, &args.to_version)?;

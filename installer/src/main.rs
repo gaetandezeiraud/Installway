@@ -6,6 +6,8 @@ mod payload;
 #[cfg(windows)]
 mod proc;
 #[cfg(windows)]
+mod ui_minimal;
+#[cfg(windows)]
 mod ui_win32;
 
 use anyhow::Result;
@@ -27,11 +29,20 @@ fn run() -> Result<()> {
     let launch = args.iter().any(|a| a == "--launch");
     let translator = common::i18n::Translator::detect(&args);
 
+    // Compact auto-start update UI (app-triggered self-update). Skips license,
+    // path picker and buttons — runs immediately, shows icon + progress.
+    if let Some(idx) = args.iter().position(|a| a == "--minimal" || a == "/minimal") {
+        let path = path_arg(&args, idx)
+            .or_else(|| std::env::var("RUSTINSTALLER_PATH").ok())
+            .unwrap_or_else(|| default_install_path(&loaded.payload.product).to_string_lossy().into_owned());
+        #[cfg(windows)]
+        return ui_minimal::run(loaded, PathBuf::from(path), launch, translator);
+        #[cfg(not(windows))]
+        return run_silent(&loaded, PathBuf::from(path), launch);
+    }
+
     if let Some(idx) = args.iter().position(|a| a == "--silent" || a == "/S") {
-        let path = args
-            .get(idx + 1)
-            .filter(|s| !s.starts_with("--") && *s != "/S")
-            .cloned()
+        let path = path_arg(&args, idx)
             .or_else(|| std::env::var("RUSTINSTALLER_PATH").ok())
             .unwrap_or_else(|| default_install_path(&loaded.payload.product).to_string_lossy().into_owned());
         return run_silent(&loaded, PathBuf::from(path), launch);
@@ -103,6 +114,13 @@ fn run_silent(
     }
     println!("Done.");
     Ok(())
+}
+
+/// The value right after a flag, unless it's another flag.
+fn path_arg(args: &[String], flag_idx: usize) -> Option<String> {
+    args.get(flag_idx + 1)
+        .filter(|s| !s.starts_with("--") && !s.starts_with('/'))
+        .cloned()
 }
 
 fn default_install_path(product: &str) -> PathBuf {
