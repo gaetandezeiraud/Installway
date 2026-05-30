@@ -206,6 +206,38 @@ the installer payload — the cached `target/release/uninstall.exe` is left
 untouched between pack runs. If the source exe has no icon resources, the
 build prints a notice and falls back to the Rust default.
 
+## File associations
+
+Pass `--assoc ".ext:Description"` (repeatable) to register file types under
+`HKCU\Software\Classes` — per-user, no admin. The shell `open` verb points at
+the installed `manifest.exe` with `"%1"`.
+
+```pwsh
+installer_builder.exe pack `
+    --product MyApp --to-version 1.0 `
+    --input .\build\myapp --exe myapp.exe `
+    --assoc ".myx:MyApp Document" `
+    --assoc ".myz:MyApp Archive" `
+    --priv-key .\keys\priv.key --pub-key .\keys\pub.key `
+    --out .\dist\setup-myapp-1.0.exe
+```
+
+Keys written per association (ProgID = `<sanitized-product>.<ext>`):
+
+```text
+HKCU\Software\Classes\.myx                          (default) = MyApp.myx
+HKCU\Software\Classes\MyApp.myx                      (default) = MyApp Document
+HKCU\Software\Classes\MyApp.myx\DefaultIcon          (default) = "<exe>",0
+HKCU\Software\Classes\MyApp.myx\shell\open\command   (default) = "<exe>" "%1"
+```
+
+`SHChangeNotify(SHCNE_ASSOCCHANGED)` fires so Explorer refreshes immediately.
+The chosen associations are recorded in `installer_info.json`; the uninstaller
+removes exactly those ProgID trees and clears each `.ext` default **only if it
+still points at our ProgID** (never stomping an association the user later
+re-pointed). Shared `progid_for` in `common::assoc` keeps installer and
+uninstaller in lock-step. Implementation: [common/src/assoc.rs](common/src/assoc.rs).
+
 ## Shortcuts
 
 If the payload `manifest.exe` is non-empty, the installer drops two `.lnk`

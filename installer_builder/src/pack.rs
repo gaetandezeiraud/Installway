@@ -2,7 +2,7 @@ use crate::args::PackArgs;
 use crate::embed;
 use anyhow::{Context, Result, bail};
 use common::models::{
-    FileEntry, InstallerPayload, Manifest, PatchInfo, PayloadKind, SignedPayload,
+    FileAssoc, FileEntry, InstallerPayload, Manifest, PatchInfo, PayloadKind, SignedPayload,
 };
 use common::utils::{bytes_blake3, collect_files, file_blake3, generate_patch};
 use ed25519_dalek::{Signer, SigningKey};
@@ -52,6 +52,8 @@ pub fn run(args: &PackArgs) -> Result<()> {
         None => None,
     };
 
+    let associations = parse_assocs(&args.assoc, &args.product)?;
+
     let payload = InstallerPayload {
         kind: if is_patch { PayloadKind::Patch } else { PayloadKind::Full },
         product: args.product.clone(),
@@ -65,6 +67,7 @@ pub fn run(args: &PackArgs) -> Result<()> {
             .unwrap_or_default(),
         manifest,
         license_text,
+        associations,
     };
 
     let payload_json = serde_json::to_string(&payload).context("serialize payload")?;
@@ -477,6 +480,26 @@ fn find_workspace_root() -> Result<PathBuf> {
             bail!("could not locate workspace root from {:?}", std::env::current_dir());
         }
     }
+}
+
+/// Parse `--assoc ".ext:Description"` entries into `FileAssoc`s.
+/// Extension is normalized to a leading dot; description may contain colons.
+fn parse_assocs(raw: &[String], product: &str) -> Result<Vec<FileAssoc>> {
+    let mut out = Vec::with_capacity(raw.len());
+    for s in raw {
+        let (ext, desc) = s
+            .split_once(':')
+            .ok_or_else(|| anyhow::anyhow!("bad --assoc '{}': expected \".ext:Description\"", s))?;
+        let ext = common::assoc::normalize_ext(ext);
+        if ext == "." {
+            bail!("bad --assoc '{}': empty extension", s);
+        }
+        let description = desc.trim().to_string();
+        let progid = common::assoc::progid_for(product, &ext);
+        println!("Association: {} -> {} ({})", ext, progid, description);
+        out.push(FileAssoc { ext, description });
+    }
+    Ok(out)
 }
 
 /// First non-empty line of `s`, truncated to 60 chars — used for log preview.

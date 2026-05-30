@@ -26,6 +26,7 @@ pub fn finalize(
             .unwrap_or_default(),
         registry_key: key.clone(),
         exe: payload.manifest.exe.clone(),
+        associations: payload.associations.clone(),
     };
     fs::write(
         install_dir.join("installer_info.json"),
@@ -38,6 +39,13 @@ pub fn finalize(
     if !payload.manifest.exe.is_empty() {
         let target = install_dir.join(&payload.manifest.exe);
         create_shortcuts(&payload.product, install_dir, &target);
+
+        // File associations point the shell at this exe.
+        if !payload.associations.is_empty() {
+            // Normalize separators so the registry command reads cleanly.
+            let exe_str = target.to_string_lossy().replace('/', "\\");
+            common::assoc::register(&payload.product, &exe_str, &payload.associations);
+        }
     }
 
     Ok(())

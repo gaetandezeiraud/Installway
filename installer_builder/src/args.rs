@@ -54,6 +54,11 @@ pub struct PackArgs {
     #[arg(long)]
     pub license: Option<PathBuf>,
 
+    /// File association, format `.ext:Description`. Repeatable.
+    /// e.g. --assoc ".myx:My App Document" --assoc ".myz:My App Archive"
+    #[arg(long = "assoc", value_name = ".ext:Description")]
+    pub assoc: Vec<String>,
+
     /// Minimum installer binary version allowed to install this payload.
     #[arg(long, default_value = "1.0.0")]
     pub min_installer_version: String,

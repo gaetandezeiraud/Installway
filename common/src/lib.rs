@@ -1,3 +1,4 @@
+pub mod assoc;
 pub mod i18n;
 pub mod log;
 pub mod models;

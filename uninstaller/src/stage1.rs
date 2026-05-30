@@ -64,8 +64,9 @@ pub fn run(silent: bool) -> Result<()> {
                 counter.step(&tr.fmt("uninstall.removing", &[("file", rel)]));
             }
 
-            // 2. Shortcuts
+            // 2. Shortcuts + file associations
             cleanup::remove_shortcuts(&info_owned.product);
+            common::assoc::unregister(&info_owned.product, &info_owned.associations);
             counter.step(&tr.get("uninstall.removing_shortcuts"));
 
             // 3. State files (manifest, version.json — installer_info.json
@@ -105,7 +106,8 @@ fn run_silent(
     let n = cleanup::remove_payload_files(install_dir, manifest);
     common::log::info(format!("removed {} payload files", n));
     cleanup::remove_shortcuts(&info.product);
-    common::log::info("removed shortcuts");
+    common::assoc::unregister(&info.product, &info.associations);
+    common::log::info("removed shortcuts + associations");
     let s = cleanup::remove_state_files(install_dir);
     common::log::info(format!("removed {} state files", s));
     cleanup::remove_empty_subdirs(install_dir);

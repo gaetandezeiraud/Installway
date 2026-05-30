@@ -50,6 +50,19 @@ pub struct InstallerPayload {
     /// `None` (or missing field on older payloads) falls back to a built-in placeholder.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub license_text: Option<String>,
+    /// File-type associations to register under `HKCU\Software\Classes`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub associations: Vec<FileAssoc>,
+}
+
+/// One file-type association: extension + a human description.
+/// The shell `open` verb is wired to the product's main exe with `"%1"`.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct FileAssoc {
+    /// Extension including the leading dot, e.g. ".myx".
+    pub ext: String,
+    /// Friendly type description shown in Explorer, e.g. "My App Document".
+    pub description: String,
 }
 
 /// What gets embedded in the installer .exe as RCDATA id=2.
@@ -76,4 +89,8 @@ pub struct InstallInfo {
     pub registry_key: String,
     /// Optional path (relative to install_dir) of the product's main exe.
     pub exe: String,
+    /// File associations registered at install time — the uninstaller removes
+    /// exactly these.
+    #[serde(default)]
+    pub associations: Vec<FileAssoc>,
 }
