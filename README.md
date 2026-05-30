@@ -222,6 +222,34 @@ uninstaller never drift apart on file naming.
 
 - Windows only.
 - No GUI folder picker on Windows < 7 (we use modern `IFileOpenDialog`).
+## Closing the running app
+
+When installing over an existing version, the installer first makes sure no
+copy of the target exe (`manifest.exe`, matched by full path inside the
+install dir, file-name fallback) is still running — otherwise its files are
+locked.
+
+**Data-safe — the installer never force-kills.** It:
+
+1. Focuses the app's main window and posts `WM_CLOSE`, so the app shows its
+   own "save your work?" prompt.
+2. Waits for the user to finish closing it, re-focusing + re-sending
+   `WM_CLOSE` every 5 s so the prompt stays in view.
+3. Proceeds the instant the process exits.
+
+There is no timeout-then-terminate. If the user never closes the app the only
+way out is the **Cancel** button (or `Ctrl+C` in silent mode), which aborts
+the install with `"<app> is still running"`. Unsaved work is always the user's
+to keep.
+
+```
+INFO  target app running (1 process(es)); requesting close (no force)
+INFO  target app closed by user after 6s
+```
+
+Console / windowless processes have no window to message — the installer
+simply waits for them to exit (or Cancel). Implementation: [installer/src/proc.rs](installer/src/proc.rs).
+
 ## Disk space pre-check
 
 Before writing a single byte the installer queries free space on the chosen

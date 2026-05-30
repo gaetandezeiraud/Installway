@@ -67,6 +67,21 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
 
     check_disk_space(&ctx.install_dir, manifest, ctx.payload.kind)?;
 
+    // Close any running copy of the target app before touching its files.
+    // Data-safe: focus window + WM_CLOSE so the app can prompt to save, then
+    // wait for the user to actually close it. Never force-killed. No-op on a
+    // fresh install. Cancelling the install aborts the wait.
+    #[cfg(windows)]
+    {
+        let pcb = ctx.on_progress.clone();
+        crate::proc::ensure_closed(
+            &ctx.install_dir,
+            &manifest.exe,
+            &ctx.cancel,
+            &move |msg| pcb(0, 0, msg),
+        )?;
+    }
+
     let temp_dir = ctx.install_dir.join(".installer_tmp");
     fs::create_dir_all(&temp_dir)?;
 

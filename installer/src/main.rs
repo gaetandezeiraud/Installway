@@ -4,6 +4,8 @@ mod extract;
 mod install;
 mod payload;
 #[cfg(windows)]
+mod proc;
+#[cfg(windows)]
 mod ui_win32;
 
 use anyhow::Result;
