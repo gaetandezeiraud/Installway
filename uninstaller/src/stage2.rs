@@ -13,6 +13,17 @@ use std::thread;
 use std::time::Duration;
 
 pub fn run(install_dir: PathBuf, product: String, parent_pid: Option<u32>) -> Result<()> {
+    // Continue stage 1's log file (keyed by stage 1's PID) so the whole
+    // uninstall is in one %TEMP% file for support.
+    let log_id = parent_pid.unwrap_or_else(std::process::id);
+    common::log::init(common::log::log_path_for_stage2(log_id));
+    common::log::info(format!(
+        "stage2 start: product={} install_dir={} parent_pid={:?}",
+        product,
+        install_dir.display(),
+        parent_pid
+    ));
+
     let install_dir_for_worker = install_dir.clone();
     let product_for_worker = product.clone();
 
@@ -65,6 +76,7 @@ pub fn run(install_dir: PathBuf, product: String, parent_pid: Option<u32>) -> Re
 
             // Schedule self for deletion on next reboot (no cmd, no flash).
             schedule_self_delete_on_reboot();
+            common::log::info("stage2 complete; self scheduled for delete-on-reboot");
             counter.step(&tr.get("uninstall.done"));
 
             // Brief pause so user sees the 100% bar.

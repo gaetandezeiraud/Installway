@@ -19,6 +19,17 @@ pub fn run(silent: bool) -> Result<()> {
     let info = cleanup::read_info(&install_dir)?;
     let manifest = cleanup::read_manifest(&install_dir)?;
 
+    // Uninstall log lives in %TEMP% so it survives the rmdir of install_dir.
+    // Stage 2 will append to the same file using our PID as the identifier.
+    common::log::init(common::log::log_path_for_stage2(std::process::id()));
+    common::log::info(format!(
+        "stage1 start: product={} version={} install_dir={} silent={}",
+        info.product,
+        info.version,
+        install_dir.display(),
+        silent
+    ));
+
     if silent {
         return run_silent(&install_dir, &info, &manifest);
     }
@@ -73,7 +84,9 @@ pub fn run(silent: bool) -> Result<()> {
             cleanup::unregister(&info_owned.registry_key);
 
             // 6. Spawn Stage 2 (separate temp copy) to finish the job.
+            common::log::info("spawning stage 2 to delete install_dir + self");
             if let Err(e) = spawn_stage2(&install_dir_owned, &info_owned.product) {
+                common::log::error(format!("stage2 spawn failed: {e:#}"));
                 ui::fatal(&tr.fmt("uninstall.spawn_failed", &[("err", &format!("{e:#}"))]));
             }
         }),
@@ -89,11 +102,15 @@ fn run_silent(
     info: &common::models::InstallInfo,
     manifest: &common::models::Manifest,
 ) -> Result<()> {
-    let _ = cleanup::remove_payload_files(install_dir, manifest);
+    let n = cleanup::remove_payload_files(install_dir, manifest);
+    common::log::info(format!("removed {} payload files", n));
     cleanup::remove_shortcuts(&info.product);
-    let _ = cleanup::remove_state_files(install_dir);
+    common::log::info("removed shortcuts");
+    let s = cleanup::remove_state_files(install_dir);
+    common::log::info(format!("removed {} state files", s));
     cleanup::remove_empty_subdirs(install_dir);
     cleanup::unregister(&info.registry_key);
+    common::log::info(format!("unregistered HKCU\\…\\Uninstall\\{}", info.registry_key));
     spawn_stage2(install_dir, &info.product)
 }
 

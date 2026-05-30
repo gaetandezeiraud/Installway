@@ -22,6 +22,25 @@ pub struct InstallCtx<'a> {
 pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
     let manifest = &ctx.payload.manifest;
 
+    // Logger goes into install_dir; create the dir up-front so the file open
+    // succeeds even on a fresh install where install_dir didn't exist yet.
+    let _ = fs::create_dir_all(&ctx.install_dir);
+    common::log::init(common::log::log_path_for_install(&ctx.install_dir));
+    let started = std::time::Instant::now();
+    common::log::info(format!(
+        "install start: product={} version={} kind={:?} install_dir={}",
+        ctx.payload.product,
+        ctx.payload.to_version,
+        ctx.payload.kind,
+        ctx.install_dir.display()
+    ));
+    common::log::info(format!(
+        "payload {} bytes, {} files, deleted {}",
+        ctx.zip_bytes.len(),
+        manifest.files.len(),
+        manifest.deleted_files.len()
+    ));
+
     if ctx.payload.kind == PayloadKind::Patch {
         let expected_from = ctx
             .payload
@@ -31,6 +50,10 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
         let current = read_local_version(&ctx.install_dir);
         let current_ref = current.as_deref().unwrap_or("");
         if current_ref != expected_from {
+            common::log::error(format!(
+                "patch refused: expected from_version={} found={}",
+                expected_from, current_ref
+            ));
             bail!(
                 "patch expects installed version {} but found {}",
                 expected_from,
@@ -57,6 +80,7 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
 
     for rel in rels {
         if ctx.cancel.load(Ordering::Relaxed) {
+            common::log::warn("install cancelled by user");
             cleanup(&temp_dir);
             bail!("cancelled by user");
         }
@@ -73,6 +97,7 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
         if dest.exists() {
             if let Ok(h) = hash_file(&dest) {
                 if h == entry.hash {
+                    common::log::info(format!("skip (hash match): {}", rel));
                     done.fetch_add(entry.size, Ordering::Relaxed);
                     (ctx.on_progress)(done.load(Ordering::Relaxed), total_bytes, rel);
                     continue;
@@ -106,8 +131,19 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
                                     if h == entry.hash {
                                         replace_file(&out_tmp, &dest)?;
                                         applied = true;
+                                        common::log::info(format!("patched: {}", rel));
+                                    } else {
+                                        common::log::warn(format!(
+                                            "patch hash mismatch, falling back to full: {}",
+                                            rel
+                                        ));
                                     }
                                 }
+                            } else {
+                                common::log::warn(format!(
+                                    "hdiff failed, falling back to full: {}",
+                                    rel
+                                ));
                             }
                             let _ = fs::remove_file(&out_tmp);
                         }
@@ -123,6 +159,10 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
                 .with_context(|| format!("read {} from embedded zip", zip_rel))?;
             let actual = blake3::hash(&bytes).to_hex().to_string();
             if actual != entry.hash {
+                common::log::error(format!(
+                    "zip vs manifest hash mismatch: {} (zip={} manifest={})",
+                    rel, actual, entry.hash
+                ));
                 bail!("hash mismatch for {} (zip vs manifest)", rel);
             }
             let out_tmp = temp_dir.join(format!(
@@ -134,17 +174,29 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
                 f.write_all(&bytes)?;
             }
             replace_file(&out_tmp, &dest)?;
+            common::log::info(format!("extracted: {} ({} bytes)", rel, entry.size));
         }
 
         done.fetch_add(entry.size, Ordering::Relaxed);
         (ctx.on_progress)(done.load(Ordering::Relaxed), total_bytes, rel);
     }
 
+    if !manifest.deleted_files.is_empty() {
+        common::log::info(format!(
+            "deleting {} obsolete files",
+            manifest.deleted_files.len()
+        ));
+    }
     delete_files(&ctx.install_dir, &manifest.deleted_files);
 
     write_local_state(&ctx.install_dir, &ctx.payload.to_version, manifest)?;
 
     cleanup(&temp_dir);
+
+    common::log::info(format!(
+        "install complete in {}ms",
+        started.elapsed().as_millis()
+    ));
 
     (ctx.on_progress)(total_bytes, total_bytes, "done");
     Ok(())

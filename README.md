@@ -222,6 +222,43 @@ uninstaller never drift apart on file naming.
 
 - Windows only.
 - No GUI folder picker on Windows < 7 (we use modern `IFileOpenDialog`).
+## Log files
+
+Every install and uninstall writes a timestamped UTC log so failures in the
+field can be debugged without a debugger. Format: one line per event,
+`YYYY-MM-DDTHH:MM:SS.mmmZ <LEVEL> <message>`. Logger flushes after every
+write, so even a crashed process leaves a complete file.
+
+| Operation | Path | Notes |
+|---|---|---|
+| **Install** (any mode) | `<install_dir>\install.log` | Removed by the uninstaller, so it lives exactly as long as the product. |
+| **Uninstall — Stage 1 + Stage 2** | `%TEMP%\rustinst-uninstall-<stage1-pid>.log` | Single combined file. Stage 1's PID is the identifier; Stage 2 receives it as `parent_pid` and appends. Survives the `rmdir` of the install directory. |
+
+Sample install log:
+```
+2026-05-30T06:40:54.599Z INFO  install start: product=testapp version=1.0 kind=Full install_dir=C:\…\install_target
+2026-05-30T06:40:54.599Z INFO  payload 201745 bytes, 3 files, deleted 0
+2026-05-30T06:40:54.602Z INFO  extracted: bin/app.exe (360448 bytes)
+2026-05-30T06:40:54.604Z INFO  extracted: data/config.json (9 bytes)
+2026-05-30T06:40:54.605Z INFO  extracted: data/readme.txt (10 bytes)
+2026-05-30T06:40:54.607Z INFO  install complete in 8ms
+```
+
+Sample uninstall log:
+```
+2026-05-30T06:42:29.768Z INFO  stage1 start: product=testapp version=1.0 install_dir=C:\…\install_target silent=true
+2026-05-30T06:42:29.770Z INFO  removed 3 payload files
+2026-05-30T06:42:29.771Z INFO  removed shortcuts
+2026-05-30T06:42:29.771Z INFO  removed 2 state files
+2026-05-30T06:42:29.772Z INFO  unregistered HKCU\…\Uninstall\testapp
+2026-05-30T06:42:29.822Z INFO  stage2 start: product=testapp install_dir=… parent_pid=Some(27068)
+2026-05-30T06:42:29.845Z INFO  stage2 complete; self scheduled for delete-on-reboot
+```
+
+Implementation lives in [common/src/log.rs](common/src/log.rs) — global
+`OnceLock<Logger>` with a `Mutex<File>`, three levels (`INFO`/`WARN`/`ERROR`),
+calls before `init()` are no-ops.
+
 ## Languages
 
 Installer + uninstaller pick the UI language in this order:
