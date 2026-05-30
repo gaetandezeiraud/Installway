@@ -42,6 +42,16 @@ pub fn run(args: &PackArgs) -> Result<()> {
         (zip_bytes, manifest) = build_full(&args.input, &args.exe, &args.to_version)?;
     }
 
+    let license_text = match &args.license {
+        Some(p) => {
+            let text = fs::read_to_string(p)
+                .with_context(|| format!("read license file {}", p.display()))?;
+            println!("License: {} ({} bytes) from {}", trimmed_title(&text), text.len(), p.display());
+            Some(text)
+        }
+        None => None,
+    };
+
     let payload = InstallerPayload {
         kind: if is_patch { PayloadKind::Patch } else { PayloadKind::Full },
         product: args.product.clone(),
@@ -54,6 +64,7 @@ pub fn run(args: &PackArgs) -> Result<()> {
             .map(|d| d.as_secs() as i64)
             .unwrap_or_default(),
         manifest,
+        license_text,
     };
 
     let payload_json = serde_json::to_string(&payload).context("serialize payload")?;
@@ -465,5 +476,15 @@ fn find_workspace_root() -> Result<PathBuf> {
         if !p.pop() {
             bail!("could not locate workspace root from {:?}", std::env::current_dir());
         }
+    }
+}
+
+/// First non-empty line of `s`, truncated to 60 chars — used for log preview.
+fn trimmed_title(s: &str) -> String {
+    let line = s.lines().find(|l| !l.trim().is_empty()).unwrap_or("").trim();
+    if line.chars().count() > 60 {
+        format!("{}…", line.chars().take(60).collect::<String>())
+    } else {
+        line.to_string()
     }
 }

@@ -16,20 +16,22 @@ pub fn run(install_dir: PathBuf, product: String, parent_pid: Option<u32>) -> Re
     let install_dir_for_worker = install_dir.clone();
     let product_for_worker = product.clone();
 
+    let tr = crate::ui::tr();
     let params = UninstallParams {
-        title: format!("Removing {}", product),
-        subtitle: "Finalizing uninstall…".to_string(),
+        title: tr.fmt("uninstall.stage2_title", &[("product", &product)]),
+        subtitle: tr.get("uninstall.stage2_subtitle"),
         confirm_text: String::new(), // never shown — we auto-advance to Progress
         worker: Box::new(move |progress: Arc<dyn Fn(u64, u64, &str) + Send + Sync>| {
+            let tr = crate::ui::tr();
             // Wait for Stage 1 to exit so file locks release.
             if let Some(pid) = parent_pid {
                 wait_for_pid(pid, Duration::from_secs(10));
             }
 
-            // 6 logical steps: wait, delete uninstall.exe, delete install_dir
-            // attempt (looped), schedule self-delete, done.
+            // 5 logical steps: wait, delete uninstall.exe, delete state,
+            // delete install_dir, schedule self-delete.
             let counter = StepCounter::new(5, progress);
-            counter.step("Waiting for installer to exit");
+            counter.step(&tr.get("uninstall.waiting"));
 
             // Delete uninstall.exe with a retry loop in case the lock isn't
             // released immediately (AV scanner, Explorer thumb cache, etc.)
@@ -43,11 +45,11 @@ pub fn run(install_dir: PathBuf, product: String, parent_pid: Option<u32>) -> Re
                 }
                 thread::sleep(Duration::from_millis(100));
             }
-            counter.step("Removing uninstaller");
+            counter.step(&tr.get("uninstall.removing_uninstaller"));
 
             // Delete installer_info.json (Stage 1 left it on purpose).
             let _ = fs::remove_file(install_dir_for_worker.join("installer_info.json"));
-            counter.step("Removing state");
+            counter.step(&tr.get("uninstall.removing_state2"));
 
             // Remove install_dir recursively, with retries.
             for _ in 0..30 {
@@ -59,11 +61,11 @@ pub fn run(install_dir: PathBuf, product: String, parent_pid: Option<u32>) -> Re
                 }
                 thread::sleep(Duration::from_millis(100));
             }
-            counter.step("Removing install directory");
+            counter.step(&tr.get("uninstall.removing_install_dir"));
 
             // Schedule self for deletion on next reboot (no cmd, no flash).
             schedule_self_delete_on_reboot();
-            counter.step("Done");
+            counter.step(&tr.get("uninstall.done"));
 
             // Brief pause so user sees the 100% bar.
             thread::sleep(Duration::from_millis(400));

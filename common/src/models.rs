@@ -46,6 +46,10 @@ pub struct InstallerPayload {
     pub payload_blake3: String,
     pub created_at_unix: i64,
     pub manifest: Manifest,
+    /// Optional EULA text shown on the License page of the installer UI.
+    /// `None` (or missing field on older payloads) falls back to a built-in placeholder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license_text: Option<String>,
 }
 
 /// What gets embedded in the installer .exe as RCDATA id=2.

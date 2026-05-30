@@ -120,12 +120,23 @@ thread_local! {
     static PAYLOAD: RefCell<Option<InstallerPayload>> = RefCell::new(None);
     static UNINSTALLER: RefCell<Option<Vec<u8>>> = RefCell::new(None);
     static LAUNCH_FLAG: RefCell<bool> = RefCell::new(false);
+    static T: RefCell<common::i18n::Translator> = RefCell::new(common::i18n::Translator::default());
 }
 
-pub fn run(loaded: LoadedPayload, default_path: PathBuf, launch_flag: bool) -> Result<()> {
+fn tr() -> common::i18n::Translator {
+    T.with(|t| *t.borrow())
+}
+
+pub fn run(
+    loaded: LoadedPayload,
+    default_path: PathBuf,
+    launch_flag: bool,
+    translator: common::i18n::Translator,
+) -> Result<()> {
     PAYLOAD.with(|p| *p.borrow_mut() = Some(loaded.payload.clone()));
     UNINSTALLER.with(|u| *u.borrow_mut() = Some(loaded.uninstaller_bytes.clone()));
     LAUNCH_FLAG.with(|l| *l.borrow_mut() = launch_flag);
+    T.with(|t| *t.borrow_mut() = translator);
 
     unsafe {
         let icc = INITCOMMONCONTROLSEX {
@@ -159,9 +170,12 @@ pub fn run(loaded: LoadedPayload, default_path: PathBuf, launch_flag: bool) -> R
         let banner_brush = CreateSolidBrush(COLORREF(ACCENT_LIGHT));
         let card_brush = CreateSolidBrush(COLORREF(0x00FFFFFF));
 
-        let title = wide(&format!(
-            "{} {} — Setup",
-            loaded.payload.product, loaded.payload.to_version
+        let title = wide(&tr().fmt(
+            "install.window_title",
+            &[
+                ("product", &loaded.payload.product),
+                ("version", &loaded.payload.to_version),
+            ],
         ));
 
         let state = Rc::new(RefCell::new(UiState {
@@ -248,19 +262,34 @@ unsafe fn build_controls(hwnd: HWND, payload: &InstallerPayload, default_path: &
     let hinst = unsafe { GetModuleHandleW(PCWSTR::null()).unwrap_or_default() };
     let hinst = HINSTANCE(hinst.0);
 
-    let header = wide(&format!(
-        "Install {} {}",
-        payload.product, payload.to_version
+    let tr = tr();
+    let header = wide(&tr.fmt(
+        "install.header",
+        &[
+            ("product", &payload.product),
+            ("version", &payload.to_version),
+        ],
     ));
     let sub = match payload.kind {
-        PayloadKind::Full => "Welcome — fresh installation".to_string(),
-        PayloadKind::Patch => format!(
-            "Update {} → {}",
-            payload.from_version.clone().unwrap_or_default(),
-            payload.to_version
+        PayloadKind::Full => tr.get("install.sub_full"),
+        PayloadKind::Patch => tr.fmt(
+            "install.sub_patch",
+            &[
+                ("from", payload.from_version.as_deref().unwrap_or("")),
+                ("to", &payload.to_version),
+            ],
         ),
     };
     let sub_w = wide(&sub);
+    let accept_w = wide(&tr.get("install.license_accept"));
+    let choose_label_w = wide(&tr.get("install.choose_label"));
+    let browse_w = wide(&tr.get("install.browse"));
+    let run_now_w = wide(&tr.get("install.run_now"));
+    let back_w = wide(&tr.get("install.back"));
+    let next_w = wide(&tr.get("install.next"));
+    let install_w = wide(&tr.get("install.install"));
+    let cancel_w = wide(&tr.get("install.cancel"));
+    let finish_w = wide(&tr.get("install.finish"));
 
     // Banner background — a wide empty STATIC; WM_CTLCOLORSTATIC paints it.
     let banner_w: Vec<u16> = "".encode_utf16().chain(std::iter::once(0)).collect();
@@ -318,11 +347,11 @@ unsafe fn build_controls(hwnd: HWND, payload: &InstallerPayload, default_path: &
         let checkbox_y = WIN_H - 124;
         let license_top = BANNER_H + PAD;
         let license_h = checkbox_y - license_top - 24;
-        let lorem_w = wide(LOREM);
+        let license_w = wide(payload.license_text.as_deref().unwrap_or(LOREM));
         let _ = CreateWindowExW(
             WS_EX_CLIENTEDGE,
             w!("EDIT"),
-            PCWSTR(lorem_w.as_ptr()),
+            PCWSTR(license_w.as_ptr()),
             WS_CHILD | WS_CLIPSIBLINGS
                 | WS_BORDER
                 | WS_VSCROLL
@@ -339,7 +368,7 @@ unsafe fn build_controls(hwnd: HWND, payload: &InstallerPayload, default_path: &
         let _ = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             w!("BUTTON"),
-            w!("I accept the terms of the license agreement"),
+            PCWSTR(accept_w.as_ptr()),
             WS_CHILD | WS_CLIPSIBLINGS | WS_TABSTOP | WINDOW_STYLE(BS_AUTOCHECKBOX),
             PAD,
             checkbox_y,
@@ -355,7 +384,7 @@ unsafe fn build_controls(hwnd: HWND, payload: &InstallerPayload, default_path: &
         let _ = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             w!("STATIC"),
-            w!("Install location:"),
+            PCWSTR(choose_label_w.as_ptr()),
             WS_CHILD,
             PAD,
             BANNER_H + PAD + 8,
@@ -385,7 +414,7 @@ unsafe fn build_controls(hwnd: HWND, payload: &InstallerPayload, default_path: &
         let _ = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             w!("BUTTON"),
-            w!("Browse..."),
+            PCWSTR(browse_w.as_ptr()),
             WS_CHILD | WS_TABSTOP | WINDOW_STYLE(BS_PUSHBUTTON),
             WIN_W - PAD - 110,
             BANNER_H + PAD + 32,
@@ -431,7 +460,7 @@ unsafe fn build_controls(hwnd: HWND, payload: &InstallerPayload, default_path: &
         let _ = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             w!("BUTTON"),
-            w!("Run program now"),
+            PCWSTR(run_now_w.as_ptr()),
             WS_CHILD | WS_TABSTOP | WINDOW_STYLE(BS_AUTOCHECKBOX),
             PAD,
             WIN_H - 124,
@@ -448,7 +477,7 @@ unsafe fn build_controls(hwnd: HWND, payload: &InstallerPayload, default_path: &
         let _ = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             w!("BUTTON"),
-            w!("< Back"),
+            PCWSTR(back_w.as_ptr()),
             WS_CHILD | WS_TABSTOP | WINDOW_STYLE(BS_PUSHBUTTON),
             PAD,
             btn_y,
@@ -462,7 +491,7 @@ unsafe fn build_controls(hwnd: HWND, payload: &InstallerPayload, default_path: &
         let _ = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             w!("BUTTON"),
-            w!("Next >"),
+            PCWSTR(next_w.as_ptr()),
             WS_CHILD | WS_TABSTOP | WINDOW_STYLE(BS_DEFPUSHBUTTON),
             WIN_W - PAD - 240,
             btn_y,
@@ -476,7 +505,7 @@ unsafe fn build_controls(hwnd: HWND, payload: &InstallerPayload, default_path: &
         let _ = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             w!("BUTTON"),
-            w!("Install"),
+            PCWSTR(install_w.as_ptr()),
             WS_CHILD | WS_TABSTOP | WINDOW_STYLE(BS_DEFPUSHBUTTON),
             WIN_W - PAD - 240,
             btn_y,
@@ -490,7 +519,7 @@ unsafe fn build_controls(hwnd: HWND, payload: &InstallerPayload, default_path: &
         let _ = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             w!("BUTTON"),
-            w!("Cancel"),
+            PCWSTR(cancel_w.as_ptr()),
             WS_CHILD | WS_TABSTOP | WINDOW_STYLE(BS_PUSHBUTTON),
             WIN_W - PAD - 120,
             btn_y,
@@ -504,7 +533,7 @@ unsafe fn build_controls(hwnd: HWND, payload: &InstallerPayload, default_path: &
         let _ = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             w!("BUTTON"),
-            w!("Finish"),
+            PCWSTR(finish_w.as_ptr()),
             WS_CHILD | WS_TABSTOP | WINDOW_STYLE(BS_DEFPUSHBUTTON),
             WIN_W - PAD - 120,
             btn_y,
@@ -581,7 +610,7 @@ unsafe fn apply_phase(hwnd: HWND, phase: Phase) {
         Phase::Done => unsafe {
             set_window_text(
                 GetDlgItem(Some(hwnd), ID_STATUS as i32).unwrap_or_default(),
-                "Installation complete.",
+                &tr().get("install.done"),
             );
             // Default the launch checkbox to checked if launch flag set OR exe known.
             let default_checked = LAUNCH_FLAG.with(|l| *l.borrow())
@@ -654,7 +683,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 if let Some(state) = s.borrow().as_ref() {
                     let text = state.borrow().error_text.clone();
                     let label = GetDlgItem(Some(hwnd), ID_STATUS as i32).unwrap_or_default();
-                    set_window_text(label, &format!("Error: {}", text));
+                    set_window_text(label, &format!("{}{}", tr().get("install.err_prefix"), text));
                 }
             });
             apply_phase(hwnd, Phase::Error);
@@ -689,7 +718,7 @@ unsafe fn on_next(hwnd: HWND) {
         let accepted = STATE.with(|s| s.borrow().as_ref().map(|st| st.borrow().license_accepted).unwrap_or(false));
         if !accepted {
             unsafe {
-                message_box(hwnd, "You must accept the license to continue.", MB_ICONWARNING);
+                message_box(hwnd, &tr().get("install.must_accept"), MB_ICONWARNING);
             }
             return;
         }
@@ -767,7 +796,7 @@ unsafe fn on_install(hwnd: HWND) {
     let edit = unsafe { GetDlgItem(Some(hwnd), ID_PATH_EDIT as i32).unwrap_or_default() };
     let path = unsafe { get_window_text(edit) };
     if path.trim().is_empty() {
-        unsafe { message_box(hwnd, "Choose an install folder first.", MB_ICONWARNING) };
+        unsafe { message_box(hwnd, &tr().get("install.err_no_path"), MB_ICONWARNING) };
         return;
     }
     let pb = PathBuf::from(path.trim());
@@ -954,7 +983,7 @@ unsafe fn get_window_text(hwnd: HWND) -> String {
 
 unsafe fn message_box(hwnd: HWND, text: &str, style: MESSAGEBOX_STYLE) {
     let t = wide(text);
-    let c = wide("Installer");
+    let c = wide(&tr().get("install.msg_caption"));
     unsafe {
         MessageBoxW(Some(hwnd), PCWSTR(t.as_ptr()), PCWSTR(c.as_ptr()), style);
     }

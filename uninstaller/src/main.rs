@@ -22,6 +22,9 @@ fn main() {
 fn run() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
+    #[cfg(windows)]
+    ui::set_translator(common::i18n::Translator::detect(&args));
+
     if let Some(idx) = args.iter().position(|a| a == "--stage2") {
         let install_dir = args
             .get(idx + 1)

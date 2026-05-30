@@ -69,6 +69,15 @@ struct State {
 
 thread_local! {
     static STATE: RefCell<Option<Rc<RefCell<State>>>> = RefCell::new(None);
+    static T: RefCell<common::i18n::Translator> = RefCell::new(common::i18n::Translator::default());
+}
+
+pub fn set_translator(tr: common::i18n::Translator) {
+    T.with(|t| *t.borrow_mut() = tr);
+}
+
+pub fn tr() -> common::i18n::Translator {
+    T.with(|t| *t.borrow())
 }
 
 pub struct UninstallParams {
@@ -247,6 +256,8 @@ unsafe fn build_controls(hwnd: HWND, p: &UninstallParams) {
     let header_w = wide(&p.title);
     let sub_w = wide(&p.subtitle);
     let confirm_w = wide(&p.confirm_text);
+    let yes_w = wide(&tr().get("uninstall.yes"));
+    let no_w = wide(&tr().get("uninstall.no"));
 
     unsafe {
         // Banner
@@ -344,7 +355,7 @@ unsafe fn build_controls(hwnd: HWND, p: &UninstallParams) {
         let _ = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             w!("BUTTON"),
-            w!("Yes, uninstall"),
+            PCWSTR(yes_w.as_ptr()),
             WS_CHILD | WS_TABSTOP | WINDOW_STYLE(BS_DEFPUSHBUTTON),
             WIN_W - PAD - 260,
             btn_y,
@@ -358,7 +369,7 @@ unsafe fn build_controls(hwnd: HWND, p: &UninstallParams) {
         let _ = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             w!("BUTTON"),
-            w!("No"),
+            PCWSTR(no_w.as_ptr()),
             WS_CHILD | WS_TABSTOP | WINDOW_STYLE(BS_PUSHBUTTON),
             WIN_W - PAD - 110,
             btn_y,
@@ -535,7 +546,7 @@ fn wide(s: &str) -> Vec<u16> {
 
 pub fn fatal(msg: &str) {
     let t = wide(msg);
-    let c = wide("Uninstall error");
+    let c = wide(&tr().get("uninstall.fatal_caption"));
     unsafe {
         MessageBoxW(None, PCWSTR(t.as_ptr()), PCWSTR(c.as_ptr()), MB_OK | MB_ICONERROR);
     }

@@ -171,6 +171,25 @@ Controls v6 visual styles, Segoe UI, DPI-aware `PerMonitorV2`, `asInvoker`
 manifest. Deliberate choice: zero runtime dependencies, every supported
 Windows version works, ~860 KB stub.
 
+## License text
+
+Pass `--license <path>` to `pack` and the UTF-8 text in that file becomes the
+EULA shown on the installer's License page. Omitting it falls back to a
+built-in lorem-ipsum placeholder. The text rides inside the signed
+`InstallerPayload`, so tampering invalidates the Ed25519 signature.
+
+```pwsh
+installer_builder.exe pack `
+    --product myapp --to-version 1.0 `
+    --input .\build\myapp `
+    --exe myapp.exe `
+    --license .\legal\EULA-myapp-en.txt `
+    --priv-key .\keys\priv.key --pub-key .\keys\pub.key `
+    --out .\dist\setup-myapp-1.0.exe
+```
+
+`--verify` prints `License: custom (<bytes>)` or `License: built-in placeholder`.
+
 ## Icon inheritance
 
 At pack time the builder reads `RT_GROUP_ICON` + every referenced `RT_ICON`
@@ -203,6 +222,21 @@ uninstaller never drift apart on file naming.
 
 - Windows only.
 - No GUI folder picker on Windows < 7 (we use modern `IFileOpenDialog`).
-- English-only UI.
-- License text is a placeholder (lorem ipsum); the build tool does not yet
-  accept a `--license` flag to inject a real EULA.
+## Languages
+
+Installer + uninstaller pick the UI language in this order:
+
+1. `--lang <code>` CLI flag (e.g. `--lang fr`)
+2. `RUSTINSTALLER_LANG` env var
+3. OS user locale via `GetUserDefaultLocaleName` (first 2 ISO-639 chars)
+4. English fallback
+
+Strings live in `common/locales/<code>.toml` and are embedded at compile time
+via `include_str!`. Adding a language = drop a new TOML, add it to the
+`SUPPORTED` slice in `common/src/i18n.rs`. Missing keys fall back to English
+then to the key literal (never blank).
+
+Bundled today: **en** (default), **fr**.
+
+`Translator::detect(&args)` is called once at startup; both stages of the
+uninstaller share the same lookup via a thread-local in `ui.rs`.

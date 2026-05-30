@@ -49,6 +49,11 @@ pub struct PackArgs {
     #[arg(short, long)]
     pub exe: String,
 
+    /// Optional path to a UTF-8 license text file shown on the License page.
+    /// If omitted, the installer uses a built-in lorem-ipsum placeholder.
+    #[arg(long)]
+    pub license: Option<PathBuf>,
+
     /// Minimum installer binary version allowed to install this payload.
     #[arg(long, default_value = "1.0.0")]
     pub min_installer_version: String,

@@ -13,3 +13,10 @@ blake3 = "1.5"
 anyhow = "1.0"
 walkdir = "2.5"
 dirs = "5"
+toml = { version = "0.8", default-features = false, features = ["parse"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Globalization",
+] }

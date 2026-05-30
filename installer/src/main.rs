@@ -23,6 +23,7 @@ fn run() -> Result<()> {
 
     let args: Vec<String> = std::env::args().skip(1).collect();
     let launch = args.iter().any(|a| a == "--launch");
+    let translator = common::i18n::Translator::detect(&args);
 
     if let Some(idx) = args.iter().position(|a| a == "--silent" || a == "/S") {
         let path = args
@@ -34,8 +35,12 @@ fn run() -> Result<()> {
         return run_silent(&loaded, PathBuf::from(path), launch);
     }
     if args.iter().any(|a| a == "--verify") {
+        let license = match &loaded.payload.license_text {
+            Some(t) => format!("custom ({} bytes)", t.len()),
+            None => "built-in placeholder".to_string(),
+        };
         println!(
-            "OK: {} {} -> {} (payload {} bytes verified)",
+            "OK: {} {} -> {} (payload {} bytes verified)\nLicense: {}",
             match loaded.payload.kind {
                 common::models::PayloadKind::Full => "FULL",
                 common::models::PayloadKind::Patch => "PATCH",
@@ -43,6 +48,7 @@ fn run() -> Result<()> {
             loaded.payload.from_version.clone().unwrap_or_else(|| "(fresh)".to_string()),
             loaded.payload.to_version,
             loaded.zip_bytes.len(),
+            license,
         );
         return Ok(());
     }
@@ -50,7 +56,7 @@ fn run() -> Result<()> {
     let default_path = default_install_path(&loaded.payload.product);
 
     #[cfg(windows)]
-    ui_win32::run(loaded, default_path, launch)?;
+    ui_win32::run(loaded, default_path, launch, translator)?;
 
     #[cfg(not(windows))]
     anyhow::bail!("only Windows is supported");

@@ -29,40 +29,44 @@ pub fn run(silent: bool) -> Result<()> {
     let install_dir_owned = install_dir.clone();
     let info_owned = info.clone();
     let manifest_owned = manifest.clone();
+    let tr = ui::tr();
 
     let params = UninstallParams {
-        title: format!("Uninstall {}", info.product),
-        subtitle: format!("Version {}", info.version),
-        confirm_text: format!(
-            "Are you sure you want to remove {} {} from:\n{}\n\nAll product files, the desktop shortcut, the Start Menu shortcut, and the Add/Remove Programs entry will be deleted.",
-            info.product, info.version, info.install_dir
+        title: tr.fmt("uninstall.title", &[("product", &info.product)]),
+        subtitle: tr.fmt("uninstall.subtitle", &[("version", &info.version)]),
+        confirm_text: tr.fmt(
+            "uninstall.confirm",
+            &[
+                ("product", &info.product),
+                ("version", &info.version),
+                ("path", &info.install_dir),
+            ],
         ),
         worker: Box::new(move |progress: Arc<dyn Fn(u64, u64, &str) + Send + Sync>| {
             let counter = StepCounter::new(total_steps, progress);
+            let tr = ui::tr();
 
             // 1. Payload files
             for rel in manifest_owned.files.keys() {
                 let p = install_dir_owned.join(rel);
                 let _ = fs::remove_file(&p);
-                counter.step(&format!("Removing {}", rel));
+                counter.step(&tr.fmt("uninstall.removing", &[("file", rel)]));
             }
 
             // 2. Shortcuts
             cleanup::remove_shortcuts(&info_owned.product);
-            counter.step("Removing shortcuts");
+            counter.step(&tr.get("uninstall.removing_shortcuts"));
 
-            // 3. State files (manifest, version.json, installer_info.json — installer_info kept
-            //    until just before spawn so stage 2 can still locate things if it needs to).
-            //    We remove version.json + installer_manifest.json now; installer_info.json stays
-            //    until stage 2 finishes so the user can still inspect it if cleanup aborts.
+            // 3. State files (manifest, version.json — installer_info.json
+            //    kept until just before spawn so stage 2 can still locate things).
             for extra in ["version.json", "installer_manifest.json"] {
                 let _ = fs::remove_file(install_dir_owned.join(extra));
             }
-            counter.step("Removing state files");
+            counter.step(&tr.get("uninstall.removing_state"));
 
             // 4. Empty subdirectories
             cleanup::remove_empty_subdirs(&install_dir_owned);
-            counter.report("Finalizing...");
+            counter.report(&tr.get("uninstall.finalizing"));
 
             // 5. Registry — last so the entry stays visible in Add/Remove Programs
             //    until we know cleanup actually ran.
@@ -70,7 +74,7 @@ pub fn run(silent: bool) -> Result<()> {
 
             // 6. Spawn Stage 2 (separate temp copy) to finish the job.
             if let Err(e) = spawn_stage2(&install_dir_owned, &info_owned.product) {
-                ui::fatal(&format!("Failed to spawn finalize step: {e:#}"));
+                ui::fatal(&tr.fmt("uninstall.spawn_failed", &[("err", &format!("{e:#}"))]));
             }
         }),
         auto_start: false,
