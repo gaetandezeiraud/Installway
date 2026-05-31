@@ -134,8 +134,7 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
         }
     }
 
-    fs::create_dir_all(&ctx.install_dir)
-        .with_context(|| format!("create {}", ctx.install_dir.display()))?;
+    check_writable(&ctx.install_dir)?;
 
     check_disk_space(&ctx.install_dir, manifest, ctx.payload.kind)?;
 
@@ -160,9 +159,16 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
     // its pre-install state before doing anything else.
     recover_if_interrupted(&temp_dir, &ctx.install_dir);
 
-    // Fresh staging + backup areas.
+    // Fresh staging + backup areas. A leftover temp here (no commit journal)
+    // means a previous run was interrupted during *staging* — the live install
+    // was never touched, so we just discard the stale staging and start over.
+    // Re-running is the resume path: files already correct are hash-skipped
+    // below, so only the remaining work is redone.
     let staged_dir = temp_dir.join("staged");
     let backup_dir = temp_dir.join("backup");
+    if temp_dir.exists() {
+        common::log::warn("discarding leftover staging from a previous incomplete run");
+    }
     let _ = fs::remove_dir_all(&temp_dir);
     fs::create_dir_all(&staged_dir).context("create staging dir")?;
     fs::create_dir_all(&backup_dir).context("create backup dir")?;
@@ -355,6 +361,35 @@ fn stage_file(
         .map_err(|e| anyhow::anyhow!("{}", io_msg("writing", staged_path, &e)))?;
     common::log::info(format!("staged (full): {} ({} bytes)", rel, entry.size));
     Ok(())
+}
+
+/// Pre-flight: make sure we can create the install dir and write into it.
+/// Catches "user picked C:\Program Files" (needs admin) up front with a clear
+/// message instead of a mid-install permission error.
+fn check_writable(dir: &Path) -> Result<()> {
+    fs::create_dir_all(dir).map_err(|e| {
+        common::log::error(format!("cannot create {}: {}", dir.display(), e));
+        anyhow::anyhow!(
+            "Cannot create the install folder:\n{}\n\nChoose a folder you can write to (e.g. under your user folder). ({})",
+            dir.display(),
+            e
+        )
+    })?;
+    let probe = long_path(&dir.join(".write_test"));
+    match File::create(&probe) {
+        Ok(_) => {
+            let _ = fs::remove_file(&probe);
+            Ok(())
+        }
+        Err(e) => {
+            common::log::error(format!("not writable: {} ({})", dir.display(), e));
+            bail!(
+                "No permission to write to:\n{}\n\nThis location may require administrator rights. Choose another folder (e.g. under your user folder). ({})",
+                dir.display(),
+                e
+            )
+        }
+    }
 }
 
 /// Safety margin on top of the estimated payload size.

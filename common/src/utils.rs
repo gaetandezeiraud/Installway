@@ -16,6 +16,22 @@ pub fn bytes_blake3(bytes: &[u8]) -> String {
     blake3::hash(bytes).to_hex().to_string()
 }
 
+/// Write a file atomically: write to a sibling `.tmp` then rename over the
+/// target. A crash can leave the `.tmp` behind but never a half-written
+/// target, so readers always see either the old or the new complete file.
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let tmp = path.with_extension("tmp");
+    fs::write(&tmp, bytes).with_context(|| format!("write {}", tmp.display()))?;
+    if path.exists() {
+        let _ = fs::remove_file(path);
+    }
+    fs::rename(&tmp, path).with_context(|| format!("commit {}", path.display()))?;
+    Ok(())
+}
+
 pub fn collect_files(root: &Path) -> Result<Vec<String>> {
     let mut files = Vec::new();
     for entry in WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {

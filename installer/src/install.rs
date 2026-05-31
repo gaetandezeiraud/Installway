@@ -28,9 +28,10 @@ pub fn finalize(
         exe: payload.manifest.exe.clone(),
         associations: payload.associations.clone(),
     };
-    fs::write(
-        install_dir.join("installer_info.json"),
-        serde_json::to_string_pretty(&info)?,
+    // Atomic write: a half-written installer_info.json would break uninstall.
+    common::utils::write_atomic(
+        &install_dir.join("installer_info.json"),
+        serde_json::to_string_pretty(&info)?.as_bytes(),
     )?;
 
     #[cfg(windows)]

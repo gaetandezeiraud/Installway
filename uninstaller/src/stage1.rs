@@ -16,12 +16,43 @@ const DETACHED_PROCESS: u32 = 0x00000008;
 
 pub fn run(silent: bool) -> Result<()> {
     let install_dir = cleanup::current_install_dir()?;
-    let info = cleanup::read_info(&install_dir)?;
-    let manifest = cleanup::read_manifest(&install_dir)?;
 
     // Uninstall log lives in %TEMP% so it survives the rmdir of install_dir.
-    // Stage 2 will append to the same file using our PID as the identifier.
     common::log::init(common::log::log_path_for_stage2(std::process::id()));
+
+    // If the install state is gone (user manually deleted files but left
+    // uninstall.exe behind), there's nothing to clean by manifest — just
+    // remove the leftover uninstaller + dir quietly. No scary error dialog.
+    let info = match cleanup::read_info(&install_dir) {
+        Ok(i) => i,
+        Err(e) => {
+            common::log::warn(format!(
+                "installer_info.json unreadable ({e:#}) — best-effort cleanup of leftovers"
+            ));
+            let product = install_dir
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            spawn_stage2(&install_dir, &product)?;
+            return Ok(());
+        }
+    };
+
+    // Manifest may be missing even when info is present (partial delete). Fall
+    // back to an empty manifest: file removal no-ops, but shortcuts/registry/
+    // dir cleanup still run.
+    let manifest = cleanup::read_manifest(&install_dir).unwrap_or_else(|e| {
+        common::log::warn(format!("manifest unreadable ({e:#}) — skipping file list"));
+        common::models::Manifest {
+            version: info.version.clone(),
+            exe: info.exe.clone(),
+            files: Default::default(),
+            deleted_files: Vec::new(),
+            full_size: 0,
+            total_patch_size: 0,
+        }
+    });
+
     common::log::info(format!(
         "stage1 start: product={} version={} install_dir={} silent={}",
         info.product,
