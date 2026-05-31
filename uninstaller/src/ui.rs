@@ -103,6 +103,9 @@ pub fn run(params: UninstallParams) -> bool {
         let _ = InitCommonControlsEx(&icc);
         let hinstance = GetModuleHandleW(PCWSTR::null()).unwrap_or_default();
 
+        // Own embedded icon (the app's icon, stamped into uninstall.exe at build).
+        let hicon = own_icon();
+
         let class_name = w!("RustUninstallerWnd");
         let wc = WNDCLASSEXW {
             cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
@@ -111,12 +114,12 @@ pub fn run(params: UninstallParams) -> bool {
             cbClsExtra: 0,
             cbWndExtra: 0,
             hInstance: HINSTANCE(hinstance.0),
-            hIcon: HICON::default(),
+            hIcon: hicon,
             hCursor: LoadCursorW(None, IDC_ARROW).unwrap_or_default(),
             hbrBackground: HBRUSH(GetStockObject(WHITE_BRUSH).0),
             lpszMenuName: PCWSTR::null(),
             lpszClassName: class_name,
-            hIconSm: HICON::default(),
+            hIconSm: hicon,
         };
         RegisterClassExW(&wc);
 
@@ -151,6 +154,11 @@ pub fn run(params: UninstallParams) -> bool {
             Ok(h) => h,
             Err(_) => return false,
         };
+
+        if !hicon.is_invalid() {
+            SendMessageW(hwnd, WM_SETICON, Some(WPARAM(1)), Some(LPARAM(hicon.0 as isize)));
+            SendMessageW(hwnd, WM_SETICON, Some(WPARAM(0)), Some(LPARAM(hicon.0 as isize)));
+        }
 
         center(hwnd);
         build_controls(hwnd, &params);
@@ -214,6 +222,26 @@ pub fn run(params: UninstallParams) -> bool {
                 .map(|st| st.borrow().yes_clicked)
                 .unwrap_or(false)
         })
+    }
+}
+
+/// Load this exe's own primary icon (stamped at build) for window + taskbar.
+unsafe fn own_icon() -> windows::Win32::UI::WindowsAndMessaging::HICON {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::Win32::Foundation::HINSTANCE;
+    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows::Win32::UI::Shell::ExtractIconW;
+    use windows::Win32::UI::WindowsAndMessaging::HICON;
+    let Ok(exe) = std::env::current_exe() else {
+        return HICON::default();
+    };
+    let w: Vec<u16> = std::ffi::OsStr::new(&exe)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    unsafe {
+        let hmod = GetModuleHandleW(PCWSTR::null()).unwrap_or_default();
+        ExtractIconW(Some(HINSTANCE(hmod.0)), PCWSTR(w.as_ptr()), 0)
     }
 }
 

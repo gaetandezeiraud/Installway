@@ -43,8 +43,9 @@ pub fn finalize(
         associations: payload.associations.clone(),
     };
 
-    // Metadata lives in the data dir so uninstall works even if the app folder
-    // is deleted. Atomic writes: a half-written file would break uninstall.
+    // All installer metadata lives in the data dir (NOT the app folder, which
+    // holds only the product's files). Atomic writes: a half-written file
+    // would break uninstall / version checks.
     common::utils::write_atomic(
         &data_dir.join("installer_info.json"),
         serde_json::to_string_pretty(&info)?.as_bytes(),
@@ -53,6 +54,15 @@ pub fn finalize(
         &data_dir.join("installer_manifest.json"),
         serde_json::to_string_pretty(&payload.manifest)?.as_bytes(),
     )?;
+    common::utils::write_atomic(
+        &data_dir.join("version.json"),
+        serde_json::to_string_pretty(&serde_json::json!({ "version": payload.to_version }))?
+            .as_bytes(),
+    )?;
+    // Copy the live %TEMP% log next to the uninstaller for support.
+    if let Some(src) = common::log::current_path() {
+        let _ = fs::copy(&src, data_dir.join("install.log"));
+    }
 
     #[cfg(windows)]
     register_uninstall(&info, &uninstaller_path)?;

@@ -10,7 +10,7 @@ mod ui_minimal;
 #[cfg(windows)]
 mod ui_win32;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -57,15 +57,16 @@ fn run() -> Result<()> {
             .unwrap_or_else(|| default_install_path(&loaded.payload.product).to_string_lossy().into_owned());
         return run_silent(&loaded, PathBuf::from(path), launch);
     }
-    // Diagnostic: re-hash an installed dir against its local manifest.
-    if let Some(idx) = args.iter().position(|a| a == "--verify-install") {
+    // Diagnostic: re-hash the installed files against the manifest stored in
+    // the per-user data dir (metadata no longer lives in the app folder).
+    if args.iter().any(|a| a == "--verify-install") {
         attach_console();
-        let dir = path_arg(&args, idx)
-            .or_else(|| std::env::var("RUSTINSTALLER_PATH").ok())
-            .unwrap_or_else(|| {
-                default_install_path(&loaded.payload.product).to_string_lossy().into_owned()
-            });
-        return extract::verify_install(&PathBuf::from(dir));
+        let data_dir = common::paths::uninstall_dir(
+            &loaded.payload.publisher,
+            &loaded.payload.product,
+        )
+        .context("resolve data dir")?;
+        return extract::verify_install(&data_dir);
     }
 
     if args.iter().any(|a| a == "--verify") {

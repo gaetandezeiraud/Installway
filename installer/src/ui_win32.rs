@@ -147,6 +147,9 @@ pub fn run(
 
         let hinstance = GetModuleHandleW(PCWSTR::null())?;
 
+        // Our own embedded icon (the packaged app's icon) for title bar + taskbar.
+        let hicon = own_icon();
+
         let class_name = w!("RustInstallerWnd");
         let wc = WNDCLASSEXW {
             cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
@@ -155,12 +158,12 @@ pub fn run(
             cbClsExtra: 0,
             cbWndExtra: 0,
             hInstance: HINSTANCE(hinstance.0),
-            hIcon: HICON::default(),
+            hIcon: hicon,
             hCursor: LoadCursorW(None, IDC_ARROW)?,
             hbrBackground: HBRUSH(GetStockObject(WHITE_BRUSH).0),
             lpszMenuName: PCWSTR::null(),
             lpszClassName: class_name,
-            hIconSm: HICON::default(),
+            hIconSm: hicon,
         };
         RegisterClassExW(&wc);
 
@@ -212,6 +215,11 @@ pub fn run(
             None,
         )?;
 
+        if !hicon.is_invalid() {
+            SendMessageW(hwnd, WM_SETICON, Some(WPARAM(1)), Some(LPARAM(hicon.0 as isize)));
+            SendMessageW(hwnd, WM_SETICON, Some(WPARAM(0)), Some(LPARAM(hicon.0 as isize)));
+        }
+
         center_window(hwnd);
         build_controls(hwnd, &loaded.payload, &default_path);
         apply_phase(hwnd, Phase::License);
@@ -225,6 +233,24 @@ pub fn run(
         }
     }
     Ok(())
+}
+
+/// Load this exe's own primary icon (the packaged app's icon, embedded at
+/// build time) for use as the window/taskbar icon. Default HICON if absent.
+unsafe fn own_icon() -> HICON {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::Win32::UI::Shell::ExtractIconW;
+    let Ok(exe) = std::env::current_exe() else {
+        return HICON::default();
+    };
+    let w: Vec<u16> = std::ffi::OsStr::new(&exe)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    unsafe {
+        let hmod = GetModuleHandleW(PCWSTR::null()).unwrap_or_default();
+        ExtractIconW(Some(HINSTANCE(hmod.0)), PCWSTR(w.as_ptr()), 0)
+    }
 }
 
 unsafe fn create_font(name: &str, height: i32, weight: i32) -> HFONT {

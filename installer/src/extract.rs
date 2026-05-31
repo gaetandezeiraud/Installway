@@ -162,7 +162,8 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
             .from_version
             .as_deref()
             .context("patch payload missing from_version")?;
-        let current = read_local_version(&ctx.install_dir);
+        // Current version lives in the per-user data dir (not the app folder).
+        let current = data_dir_of(ctx.payload).and_then(|d| read_local_version(&d));
         let current_ref = current.as_deref().unwrap_or("");
         if current_ref != expected_from {
             common::log::error(format!(
@@ -295,11 +296,11 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
     // force_reinstall: also remove any existing file that isn't part of this
     // build (clean slate). Backed up like any delete, so still rollback-safe.
     if ctx.payload.force_reinstall {
-        const PROTECTED: [&str; 3] = ["version.json", "installer_manifest.json", "install.log"];
         if let Ok(existing) = common::utils::collect_files(&ctx.install_dir) {
             for rel in existing {
+                // Skip our transient staging dir; everything else not in the
+                // build is an orphan (installer metadata no longer lives here).
                 if rel.starts_with(".installer_tmp")
-                    || PROTECTED.contains(&rel.as_str())
                     || manifest.files.contains_key(&rel)
                     || deleted.contains(&rel)
                     || safe_rel(&rel).is_err()
@@ -359,7 +360,9 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
         let _ = fs::remove_file(journal_path(&temp_dir));
     }
 
-    write_local_state(&ctx.install_dir, &ctx.payload.to_version, manifest)?;
+    // Installer metadata (version.json, manifest, info, uninstall.exe, log) is
+    // written to the per-user data dir by `install::finalize`, NOT into the app
+    // folder - the app folder holds only the product's own files.
     cleanup(&temp_dir);
 
     common::log::info(format!(
@@ -367,19 +370,8 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
         started.elapsed().as_millis()
     ));
 
-    // Copy the %TEMP% log next to the app for the user / support (best-effort).
-    copy_log_to_install_dir(&ctx.install_dir);
-
     (ctx.on_progress)(total_bytes, total_bytes, "done");
     Ok(())
-}
-
-/// Best-effort copy of the live %TEMP% log into the install dir as
-/// `install.log`, so it sits next to the app after a successful install.
-fn copy_log_to_install_dir(install_dir: &Path) {
-    if let Some(src) = common::log::current_path() {
-        let _ = fs::copy(&src, install_dir.join("install.log"));
-    }
 }
 
 /// Build the final content for `rel` into `staged_path`, verified by BLAKE3.
@@ -766,35 +758,17 @@ fn recover_if_interrupted(temp_dir: &Path, install_dir: &Path) {
     common::log::warn("recovery complete: install rolled back to previous state");
 }
 
-fn read_local_version(install_dir: &Path) -> Option<String> {
-    let p = install_dir.join("version.json");
-    let s = fs::read_to_string(p).ok()?;
+/// Per-user data dir for this payload (where version.json / manifest / info /
+/// uninstall.exe / log live). `None` only if %LOCALAPPDATA% can't be resolved.
+fn data_dir_of(payload: &InstallerPayload) -> Option<PathBuf> {
+    common::paths::uninstall_dir(&payload.publisher, &payload.product)
+}
+
+/// Read the recorded installed version from `version.json` in the data dir.
+fn read_local_version(data_dir: &Path) -> Option<String> {
+    let s = fs::read_to_string(data_dir.join("version.json")).ok()?;
     let v: serde_json::Value = serde_json::from_str(&s).ok()?;
     v["version"].as_str().map(|s| s.to_string())
-}
-
-/// Write state files atomically (.tmp then rename) so a crash can't leave a
-/// half-written / corrupt JSON behind.
-fn write_local_state(install_dir: &Path, version: &str, manifest: &Manifest) -> Result<()> {
-    write_atomic(
-        &install_dir.join("version.json"),
-        serde_json::to_string_pretty(&serde_json::json!({ "version": version }))?.as_bytes(),
-    )?;
-    write_atomic(
-        &install_dir.join("installer_manifest.json"),
-        serde_json::to_string_pretty(manifest)?.as_bytes(),
-    )?;
-    Ok(())
-}
-
-fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
-    let tmp = path.with_extension("json.tmp");
-    fs::write(&tmp, bytes).with_context(|| format!("write {}", tmp.display()))?;
-    if path.exists() {
-        let _ = fs::remove_file(path);
-    }
-    fs::rename(&tmp, path).with_context(|| format!("commit {}", path.display()))?;
-    Ok(())
 }
 
 fn strip_prefix<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
@@ -827,19 +801,25 @@ fn verify_committed(install_dir: &Path, manifest: &Manifest, committed: &[String
     Ok(())
 }
 
-/// Diagnostic: re-hash every file in `installer_manifest.json` under
-/// `install_dir` and report missing / corrupted files. Returns `Err` if any
-/// file is missing or its hash doesn't match (exit code 1 for scripts).
-pub fn verify_install(install_dir: &Path) -> Result<()> {
-    let manifest_path = install_dir.join("installer_manifest.json");
-    let data = fs::read_to_string(&manifest_path).with_context(|| {
-        format!(
-            "read {} - is this an installed product directory?",
-            manifest_path.display()
-        )
+/// Diagnostic: re-hash every installed file and report missing / corrupted
+/// files. `data_dir` holds the manifest + info (per-user data dir); the actual
+/// files are checked under `info.install_dir` (the app folder). Returns `Err`
+/// if anything is missing or corrupt (exit code 1 for scripts).
+pub fn verify_install(data_dir: &Path) -> Result<()> {
+    let info_path = data_dir.join("installer_info.json");
+    let info_data = fs::read_to_string(&info_path).with_context(|| {
+        format!("read {} - is this product installed?", info_path.display())
     })?;
+    let info: common::models::InstallInfo =
+        serde_json::from_str(&info_data).context("parse installer_info.json")?;
+
+    let manifest_path = data_dir.join("installer_manifest.json");
+    let mdata = fs::read_to_string(&manifest_path)
+        .with_context(|| format!("read {}", manifest_path.display()))?;
     let manifest: Manifest =
-        serde_json::from_str(&data).context("parse installer_manifest.json")?;
+        serde_json::from_str(&mdata).context("parse installer_manifest.json")?;
+
+    let app_dir = PathBuf::from(&info.install_dir);
 
     let mut rels: Vec<(&String, &common::models::FileEntry)> = manifest.files.iter().collect();
     rels.sort_by(|a, b| a.0.cmp(b.0));
@@ -853,7 +833,7 @@ pub fn verify_install(install_dir: &Path) -> Result<()> {
             println!("SKIP  {} (unsafe path)", rel);
             continue;
         }
-        let path = long_path(&install_dir.join(rel));
+        let path = long_path(&app_dir.join(rel));
         if !path.exists() {
             println!("MISSING  {}", rel);
             missing += 1;
@@ -874,7 +854,7 @@ pub fn verify_install(install_dir: &Path) -> Result<()> {
 
     println!(
         "verify {}: {} OK, {} missing, {} corrupt (version {})",
-        install_dir.display(),
+        app_dir.display(),
         ok,
         missing,
         corrupt,
