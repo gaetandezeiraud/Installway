@@ -4,6 +4,8 @@ mod embed;
 mod icon;
 mod keygen;
 mod pack;
+#[cfg(windows)]
+mod version;
 
 use anyhow::Result;
 use clap::Parser;

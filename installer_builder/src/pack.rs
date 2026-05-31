@@ -158,8 +158,15 @@ pub fn run(args: &PackArgs) -> Result<()> {
             eprintln!("warning: icon embed into setup failed: {e:#}");
         }
     }
+    // Version resource (Explorer Details tab + SmartScreen reputation).
+    #[cfg(windows)]
+    if let Err(e) =
+        crate::version::embed(&args.out, &args.product, &args.publisher, &args.to_version)
+    {
+        eprintln!("warning: version-info embed failed: {e:#}");
+    }
     println!(
-        "Embedded payload + signed manifest + uninstaller{} into {}",
+        "Embedded payload + signed manifest + uninstaller{} + version into {}",
         if icons.is_some() { " + icon" } else { "" },
         args.out.display()
     );

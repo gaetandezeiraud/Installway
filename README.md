@@ -280,6 +280,16 @@ installer_builder.exe pack `
 
 `--verify` prints `License: custom (<bytes>)` or `License: built-in placeholder`.
 
+## Version info
+
+Pack stamps a Win32 `VS_VERSIONINFO` (RT_VERSION) resource into the setup.exe,
+built from `--product` / `--publisher` / `--to-version`. Explorer's **Details**
+tab then shows FileVersion, ProductVersion, ProductName, CompanyName,
+FileDescription (`<product> Setup`), OriginalFilename and copyright - a complete
+binary that looks finished and builds SmartScreen reputation. `--to-version`
+is parsed as `a.b.c.d` (missing parts = 0). Implementation:
+[installer_builder/src/version.rs](installer_builder/src/version.rs).
+
 ## Icon inheritance
 
 At pack time the builder reads `RT_GROUP_ICON` + every referenced `RT_ICON`
