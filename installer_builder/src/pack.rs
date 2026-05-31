@@ -31,7 +31,24 @@ pub fn run(args: &PackArgs) -> Result<()> {
     );
 
     let signing = load_signing_key(&args.priv_key)?;
-    let pub_key_hex = load_pub_key_hex(&args.pub_key)?;
+
+    // Toolchain-free mode: a prebuilt stub + uninstaller are supplied, so we
+    // never invoke cargo. The stub already has its public key baked in, so
+    // --pub-key isn't needed (the signing key must match that baked key).
+    let prebuilt = args.installer_stub.is_some() || args.uninstaller.is_some();
+    if prebuilt && (args.installer_stub.is_none() || args.uninstaller.is_none()) {
+        bail!("--installer-stub and --uninstaller must be provided together");
+    }
+    let pub_key_hex: Option<String> = if prebuilt {
+        println!("Toolchain-free mode: using prebuilt binaries (no cargo build)");
+        None
+    } else {
+        let p = args
+            .pub_key
+            .as_ref()
+            .context("--pub-key is required (omit it only when using --installer-stub)")?;
+        Some(load_pub_key_hex(p)?)
+    };
 
     let zip_bytes;
     let manifest;
@@ -90,7 +107,19 @@ pub fn run(args: &PackArgs) -> Result<()> {
     println!("Payload: {} bytes (zip)", zip_bytes.len());
     println!("Signed manifest: {} bytes", signed_json.len());
 
-    let stub = build_installer_stub(&pub_key_hex, args.reuse_stub)?;
+    let stub = match &args.installer_stub {
+        Some(p) => {
+            if !p.exists() {
+                bail!("--installer-stub not found: {}", p.display());
+            }
+            println!("Using prebuilt stub: {}", p.display());
+            p.clone()
+        }
+        None => build_installer_stub(
+            pub_key_hex.as_deref().expect("pub_key_hex set in toolchain mode"),
+            args.reuse_stub,
+        )?,
+    };
     println!("Stub: {}", stub.display());
 
     // Pull the icon from the packaged exe (best-effort).
@@ -124,7 +153,15 @@ pub fn run(args: &PackArgs) -> Result<()> {
     #[cfg(not(windows))]
     let icons: Option<()> = None;
 
-    let uninstaller = build_uninstaller(args.reuse_stub)?;
+    let uninstaller = match &args.uninstaller {
+        Some(p) => {
+            if !p.exists() {
+                bail!("--uninstaller not found: {}", p.display());
+            }
+            p.clone()
+        }
+        None => build_uninstaller(args.reuse_stub)?,
+    };
     // Stage uninstaller into %TEMP%, stamp icons there, then read its bytes
     // for the installer RCDATA payload. Avoids mutating the cached release artifact.
     let staged_uninstaller = std::env::temp_dir().join(format!(

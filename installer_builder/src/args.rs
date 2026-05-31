@@ -79,15 +79,30 @@ pub struct PackArgs {
     #[arg(long)]
     pub priv_key: PathBuf,
 
-    /// Path to the Ed25519 public key file (embedded in installer at compile time).
+    /// Path to the Ed25519 public key file. Required only in toolchain mode
+    /// (it gets compiled into a freshly built stub). Not needed with
+    /// `--installer-stub`, since a prebuilt stub already has the key baked in.
     #[arg(long)]
-    pub pub_key: PathBuf,
+    pub pub_key: Option<PathBuf>,
+
+    /// Prebuilt installer stub (`installer.exe`) with the public key already
+    /// compiled in. When given, no Rust toolchain is needed: the builder
+    /// reuses this binary instead of running `cargo build`. Requires
+    /// `--uninstaller` too.
+    #[arg(long)]
+    pub installer_stub: Option<PathBuf>,
+
+    /// Prebuilt uninstaller (`uninstall.exe`). Used together with
+    /// `--installer-stub` for toolchain-free packaging.
+    #[arg(long)]
+    pub uninstaller: Option<PathBuf>,
 
     /// Output installer .exe path.
     #[arg(short, long)]
     pub out: PathBuf,
 
-    /// Skip rebuilding installer crate if the stub already exists.
+    /// Skip rebuilding installer crate if the stub already exists
+    /// (toolchain mode only).
     #[arg(long)]
     pub reuse_stub: bool,
 }

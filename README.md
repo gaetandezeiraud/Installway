@@ -122,6 +122,41 @@ The resulting installer:
 Still fully transactional: orphan removals are backed up and rolled back if the
 install fails. Intended for development; ship normal installers to users.
 
+### Toolchain-free packaging (prebuilt kit)
+
+By default `pack` runs `cargo build` to produce the stub + uninstaller, so it
+needs the Rust toolchain and this source tree. To let someone package versions
+**without Rust**, build the binaries once and hand them a kit.
+
+1. **Once, with the toolchain** (you, the vendor):
+
+   ```pwsh
+   $env:INSTALLER_PUB_KEY = Get-Content .\keys\pub.key
+   cargo build --release -p installer -p uninstaller -p installer_builder
+   ```
+
+   This bakes your public key into `installer.exe`. Collect into a kit folder:
+   `installer_builder.exe`, `installer.exe`, `uninstall.exe`, and `priv.key`
+   (keep `priv.key` secret - whoever holds it can sign installers).
+
+2. **Anytime, no toolchain** (the packager, on any Windows box):
+
+   ```pwsh
+   .\installer_builder.exe pack `
+       --product myapp --publisher "My Company" --to-version 1.0 `
+       --input .\files --exe myapp.exe `
+       --installer-stub .\installer.exe `
+       --uninstaller   .\uninstall.exe `
+       --priv-key      .\priv.key `
+       --out .\setup-myapp-1.0.exe
+   ```
+
+   `--pub-key` is **not** needed (the stub already has the key compiled in). The
+   `--priv-key` must match that baked public key, or the produced installer will
+   reject its own payload at runtime. Works for patch builds too (add
+   `--from-version`/`--from-dir`). Icon, version-info, overlay and signing all
+   behave identically.
+
 ## Installation
 
 ### Interactive
