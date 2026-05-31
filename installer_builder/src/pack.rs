@@ -76,6 +76,7 @@ pub fn run(args: &PackArgs) -> Result<()> {
         manifest,
         license_text,
         associations,
+        force_reinstall: args.force_reinstall,
     };
 
     let payload_json = serde_json::to_string(&payload).context("serialize payload")?;

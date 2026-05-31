@@ -69,6 +69,12 @@ pub struct PackArgs {
     #[arg(long, default_value = "1.0.0")]
     pub min_installer_version: String,
 
+    /// Dev: reinstall from scratch. Skips the patch from-version check,
+    /// re-writes every file (no hash-skip), and removes any existing files
+    /// that aren't part of this build. Intended for development installers.
+    #[arg(long)]
+    pub force_reinstall: bool,
+
     /// Path to the Ed25519 private key file.
     #[arg(long)]
     pub priv_key: PathBuf,

@@ -141,7 +141,11 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
         manifest.deleted_files.len()
     ));
 
-    if ctx.payload.kind == PayloadKind::Patch {
+    if ctx.payload.force_reinstall {
+        common::log::info("force_reinstall set: skipping version check, reinstalling from scratch");
+    }
+
+    if ctx.payload.kind == PayloadKind::Patch && !ctx.payload.force_reinstall {
         let expected_from = ctx
             .payload
             .from_version
@@ -235,8 +239,8 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
         let dest = long_path(&ctx.install_dir.join(rel));
         (ctx.on_progress)(done.load(Ordering::Relaxed), total_bytes, rel);
 
-        // Hash-skip if already correct.
-        if dest.exists() {
+        // Hash-skip if already correct (disabled in force_reinstall: rewrite all).
+        if dest.exists() && !ctx.payload.force_reinstall {
             if let Ok(h) = hash_file(&dest) {
                 if h == entry.hash {
                     common::log::info(format!("skip (hash match): {}", rel));
@@ -274,6 +278,26 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
         }
         if long_path(&ctx.install_dir.join(rel)).exists() {
             deleted.push(rel.clone());
+        }
+    }
+
+    // force_reinstall: also remove any existing file that isn't part of this
+    // build (clean slate). Backed up like any delete, so still rollback-safe.
+    if ctx.payload.force_reinstall {
+        const PROTECTED: [&str; 3] = ["version.json", "installer_manifest.json", "install.log"];
+        if let Ok(existing) = common::utils::collect_files(&ctx.install_dir) {
+            for rel in existing {
+                if rel.starts_with(".installer_tmp")
+                    || PROTECTED.contains(&rel.as_str())
+                    || manifest.files.contains_key(&rel)
+                    || deleted.contains(&rel)
+                    || safe_rel(&rel).is_err()
+                {
+                    continue;
+                }
+                common::log::info(format!("force_reinstall: removing orphan {}", rel));
+                deleted.push(rel);
+            }
         }
     }
 

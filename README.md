@@ -98,6 +98,28 @@ A patch installer carries only the deltas (or the full bytes for files where
 the delta would be bigger) plus the list of files to delete. Unchanged files
 have no payload entry at all.
 
+### Dev: reinstall from scratch
+
+Add `--force-reinstall` to any build (full or patch):
+
+```pwsh
+.\target\release\installer_builder.exe pack `
+    --product myapp --publisher "My Company" `
+    --to-version 1.0 --input .\build\myapp-1.0 --exe myapp.exe `
+    --force-reinstall `
+    --priv-key .\keys\priv.key --pub-key .\keys\pub.key `
+    --out .\dist\setup-myapp-dev.exe
+```
+
+The resulting installer:
+- **skips the patch from-version check** (installs over any/no existing version);
+- **rewrites every file** (no hash-skip — guarantees fresh bytes);
+- **removes orphans** (any existing file not part of this build), so the install
+  matches the build exactly.
+
+Still fully transactional: orphan removals are backed up and rolled back if the
+install fails. Intended for development; ship normal installers to users.
+
 ## Installation
 
 ### Interactive

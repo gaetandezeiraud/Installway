@@ -58,6 +58,10 @@ pub struct InstallerPayload {
     /// File-type associations to register under `HKCU\Software\Classes`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub associations: Vec<FileAssoc>,
+    /// Dev flag: ignore the installed version and reinstall from scratch
+    /// (skip patch from-version check, rewrite all files, remove orphans).
+    #[serde(default)]
+    pub force_reinstall: bool,
 }
 
 /// One file-type association: extension + a human description.
