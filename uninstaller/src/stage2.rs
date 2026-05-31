@@ -22,7 +22,7 @@ pub fn run(
     // Continue stage 1's log file (keyed by stage 1's PID) so the whole
     // uninstall is in one %TEMP% file for support.
     let log_id = parent_pid.unwrap_or_else(std::process::id);
-    common::log::init(common::log::log_path_for_stage2(log_id));
+    common::log::init(common::log::log_path_for_stage2(&product, log_id));
     common::log::info(format!(
         "stage2 start: product={} app_dir={} data_dir={} parent_pid={:?}",
         product,

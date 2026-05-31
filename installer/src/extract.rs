@@ -122,10 +122,13 @@ pub struct InstallCtx<'a> {
 pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
     let manifest = &ctx.payload.manifest;
 
-    // Logger goes into install_dir; create the dir up-front so the file open
-    // succeeds even on a fresh install where install_dir didn't exist yet.
-    let _ = fs::create_dir_all(&ctx.install_dir);
-    common::log::init(common::log::log_path_for_install(&ctx.install_dir));
+    // Log to %TEMP% so diagnostics survive even when the install dir isn't
+    // writable (the exact failure we want logged). Copied into the install dir
+    // on success for the user / support.
+    common::log::init(common::log::log_path_installer_temp(
+        &ctx.payload.product,
+        std::process::id(),
+    ));
     let started = std::time::Instant::now();
     common::log::info(format!(
         "install start: product={} version={} kind={:?} install_dir={}",
@@ -356,8 +359,19 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
         started.elapsed().as_millis()
     ));
 
+    // Copy the %TEMP% log next to the app for the user / support (best-effort).
+    copy_log_to_install_dir(&ctx.install_dir);
+
     (ctx.on_progress)(total_bytes, total_bytes, "done");
     Ok(())
+}
+
+/// Best-effort copy of the live %TEMP% log into the install dir as
+/// `install.log`, so it sits next to the app after a successful install.
+fn copy_log_to_install_dir(install_dir: &Path) {
+    if let Some(src) = common::log::current_path() {
+        let _ = fs::copy(&src, install_dir.join("install.log"));
+    }
 }
 
 /// Build the final content for `rel` into `staged_path`, verified by BLAKE3.

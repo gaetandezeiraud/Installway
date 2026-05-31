@@ -20,7 +20,16 @@ pub fn run(silent: bool) -> Result<()> {
     let data_dir = cleanup::self_dir()?;
 
     // Uninstall log lives in %TEMP% so it survives the rmdir of both dirs.
-    common::log::init(common::log::log_path_for_stage2(std::process::id()));
+    // Name it by product (the data-dir folder name is the sanitized product)
+    // so support can tell which app this log is for.
+    let product_hint = data_dir
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    common::log::init(common::log::log_path_for_stage2(
+        &product_hint,
+        std::process::id(),
+    ));
 
     // If the metadata is gone, just remove leftovers quietly (no error dialog).
     let info = match cleanup::read_info(&data_dir) {

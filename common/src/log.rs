@@ -118,12 +118,23 @@ pub fn log_path_for_install(install_dir: &Path) -> PathBuf {
     install_dir.join("install.log")
 }
 
+/// Installer log in `%TEMP%`, named by product (so support can tell which app
+/// failed) + PID (uniqueness across concurrent runs). Used as the *live* log
+/// target so diagnostics survive even when the chosen install dir isn't
+/// writable. Copied into the install dir on success.
+#[allow(dead_code)]
+pub fn log_path_installer_temp(product: &str, pid: u32) -> PathBuf {
+    let name = crate::paths::sanitize_component(product);
+    std::env::temp_dir().join(format!("{}-install-{}.log", name, pid))
+}
+
 #[allow(dead_code)]
 pub fn log_path_for_uninstall(install_dir: &Path) -> PathBuf {
     install_dir.join("uninstall.log")
 }
 
 #[allow(dead_code)]
-pub fn log_path_for_stage2(pid: u32) -> PathBuf {
-    std::env::temp_dir().join(format!("rustinst-uninstall-{}.log", pid))
+pub fn log_path_for_stage2(product: &str, pid: u32) -> PathBuf {
+    let name = crate::paths::sanitize_component(product);
+    std::env::temp_dir().join(format!("{}-uninstall-{}.log", name, pid))
 }
