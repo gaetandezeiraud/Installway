@@ -21,13 +21,13 @@ pub fn run(silent: bool) -> Result<()> {
     common::log::init(common::log::log_path_for_stage2(std::process::id()));
 
     // If the install state is gone (user manually deleted files but left
-    // uninstall.exe behind), there's nothing to clean by manifest — just
+    // uninstall.exe behind), there's nothing to clean by manifest - just
     // remove the leftover uninstaller + dir quietly. No scary error dialog.
     let info = match cleanup::read_info(&install_dir) {
         Ok(i) => i,
         Err(e) => {
             common::log::warn(format!(
-                "installer_info.json unreadable ({e:#}) — best-effort cleanup of leftovers"
+                "installer_info.json unreadable ({e:#}) - best-effort cleanup of leftovers"
             ));
             let product = install_dir
                 .file_name()
@@ -42,7 +42,7 @@ pub fn run(silent: bool) -> Result<()> {
     // back to an empty manifest: file removal no-ops, but shortcuts/registry/
     // dir cleanup still run.
     let manifest = cleanup::read_manifest(&install_dir).unwrap_or_else(|e| {
-        common::log::warn(format!("manifest unreadable ({e:#}) — skipping file list"));
+        common::log::warn(format!("manifest unreadable ({e:#}) - skipping file list"));
         common::models::Manifest {
             version: info.version.clone(),
             exe: info.exe.clone(),
@@ -100,7 +100,7 @@ pub fn run(silent: bool) -> Result<()> {
             common::assoc::unregister(&info_owned.product, &info_owned.associations);
             counter.step(&tr.get("uninstall.removing_shortcuts"));
 
-            // 3. State files (manifest, version.json — installer_info.json
+            // 3. State files (manifest, version.json - installer_info.json
             //    kept until just before spawn so stage 2 can still locate things).
             for extra in ["version.json", "installer_manifest.json"] {
                 let _ = fs::remove_file(install_dir_owned.join(extra));
@@ -111,7 +111,7 @@ pub fn run(silent: bool) -> Result<()> {
             cleanup::remove_empty_subdirs(&install_dir_owned);
             counter.report(&tr.get("uninstall.finalizing"));
 
-            // 5. Registry — last so the entry stays visible in Add/Remove Programs
+            // 5. Registry - last so the entry stays visible in Add/Remove Programs
             //    until we know cleanup actually ran.
             cleanup::unregister(&info_owned.registry_key);
 
@@ -143,7 +143,7 @@ fn run_silent(
     common::log::info(format!("removed {} state files", s));
     cleanup::remove_empty_subdirs(install_dir);
     cleanup::unregister(&info.registry_key);
-    common::log::info(format!("unregistered HKCU\\…\\Uninstall\\{}", info.registry_key));
+    common::log::info(format!("unregistered HKCU\\...\\Uninstall\\{}", info.registry_key));
     spawn_stage2(install_dir, &info.product)
 }
 

@@ -1,6 +1,6 @@
 # RustIInstaller
 
-Local, single-file `.exe` installer in the style of InstallShield / MSI — but
+Local, single-file `.exe` installer in the style of InstallShield / MSI - but
 written in Rust and built around the same BLAKE3 + HDiffPatch manifest format
 used by the sibling RustUpdater project.
 
@@ -22,7 +22,7 @@ The installer carries four overlapping guarantees:
 
 1. **Ed25519 signature** over the exact JSON bytes that describe the payload. The
    public key is **compiled** into the installer stub via the `INSTALLER_PUB_KEY`
-   build-time env var — never embedded as a resource, so an attacker cannot swap
+   build-time env var - never embedded as a resource, so an attacker cannot swap
    key + payload together.
 2. **BLAKE3 of the zip payload** is recorded in the signed manifest and
    re-verified at runtime before any byte is extracted.
@@ -33,7 +33,7 @@ The installer carries four overlapping guarantees:
 5. **Patch from-version pinning**: a patch installer carries `from_version` and
    refuses to run unless the target directory's `version.json` matches.
 
-Authenticode is **not** handled in code — sign the final `.exe` with
+Authenticode is **not** handled in code - sign the final `.exe` with
 `signtool.exe sign /fd SHA256 /tr http://timestamp.digicert.com setup-...exe`
 as a separate post-build step (the builder prints the exact command).
 
@@ -99,10 +99,10 @@ have no payload entry at all.
 
 Double-click the `.exe`. The wizard walks through:
 
-1. **License** — lorem-ipsum EULA (placeholder), "I accept" checkbox gates the Next button.
-2. **Choose install location** — default `%LOCALAPPDATA%\Programs\<product>`, with a native `IFileOpenDialog` folder picker.
-3. **Progress** — Win11 progress bar + per-file status. Cancel-safe.
-4. **Done** — "Run program now" checkbox (defaults to checked when `manifest.exe` is set). Finish launches the installed program via `ShellExecuteW`.
+1. **License** - lorem-ipsum EULA (placeholder), "I accept" checkbox gates the Next button.
+2. **Choose install location** - default `%LOCALAPPDATA%\Programs\<product>`, with a native `IFileOpenDialog` folder picker.
+3. **Progress** - Win11 progress bar + per-file status. Cancel-safe.
+4. **Done** - "Run program now" checkbox (defaults to checked when `manifest.exe` is set). Finish launches the installed program via `ShellExecuteW`.
 
 No admin elevation (manifest declares `asInvoker`). Segoe UI font, Common
 Controls v6 visual styles, DPI-aware (`PerMonitorV2`).
@@ -115,7 +115,7 @@ Controls v6 visual styles, DPI-aware (`PerMonitorV2`).
 ```
 
 Compact windowed UI for updates the app launches itself. **No license page, no
-folder picker, no Install button** — it starts the moment it opens and just
+folder picker, no Install button** - it starts the moment it opens and just
 shows progress:
 
 ```text
@@ -158,7 +158,7 @@ classic Add/Remove Programs). Removing it from there launches
 3. Removes empty subdirectories.
 4. Deletes the HKCU Uninstall registry entry.
 5. Schedules `uninstall.exe` + `install_dir` cleanup via a detached
-   `cmd /C ping … & del & rd` so the running process can exit first.
+   `cmd /C ping ... & del & rd` so the running process can exit first.
 
 `uninstall.exe --silent` skips the confirmation dialog (used by the registry
 `QuietUninstallString`).
@@ -179,7 +179,7 @@ Verifies the embedded payload and prints kind / versions / payload size.
 
 Re-hashes every file in the installed `installer_manifest.json` and reports
 `OK` / `MISSING` / `CORRUPT` per file. Exit code `0` if clean, `1` if anything
-is missing or corrupted — handy for support / scripted health checks after a
+is missing or corrupted - handy for support / scripted health checks after a
 suspected disk problem.
 
 ## Runtime behavior
@@ -187,24 +187,24 @@ suspected disk problem.
 For every file in the manifest:
 
 1. If the destination file already exists **and** its BLAKE3 matches the
-   manifest — skip. This means a re-run of an installer is effectively
+   manifest - skip. This means a re-run of an installer is effectively
    instant.
 2. Else, if this is a patch installer and the destination file exists and the
-   manifest has a `PatchInfo` for it — read the patch out of the embedded zip,
+   manifest has a `PatchInfo` for it - read the patch out of the embedded zip,
    apply HDiffPatch, verify BLAKE3, atomic rename. Fall through to full
    extract if anything fails.
-3. Else — read `full/<rel>` out of the embedded zip, verify BLAKE3, atomic
+3. Else - read `full/<rel>` out of the embedded zip, verify BLAKE3, atomic
    rename.
 
 Files listed in `Manifest.deleted_files` are removed afterwards.
 
-`version.json` and `installer_manifest.json` are written to the install root —
+`version.json` and `installer_manifest.json` are written to the install root -
 they are the canonical record of what got installed and double as
 state-required by any subsequent patch installer.
 
 ## UI
 
-Single modernized Win32 UI — no Tauri, no WebView2, no HTML runtime. Common
+Single modernized Win32 UI - no Tauri, no WebView2, no HTML runtime. Common
 Controls v6 visual styles, Segoe UI, DPI-aware `PerMonitorV2`, `asInvoker`
 manifest. Deliberate choice: zero runtime dependencies, every supported
 Windows version works, ~860 KB stub.
@@ -233,21 +233,21 @@ installer_builder.exe pack `
 At pack time the builder reads `RT_GROUP_ICON` + every referenced `RT_ICON`
 from `<input>/<exe>` (the app being packaged) via
 `LoadLibraryExW(LOAD_LIBRARY_AS_DATAFILE)` and stamps them into both
-`setup-…exe` and the embedded `uninstall.exe` via
+`setup-...exe` and the embedded `uninstall.exe` via
 `BeginUpdateResourceW / UpdateResourceW / EndUpdateResourceW`. Result:
 Windows Explorer shows the application's own icon on the installer and
 uninstaller files, and on the Add/Remove Programs entry (the registry
 `DisplayIcon` already points at `uninstall.exe`).
 
 The uninstaller is stamped in a staging copy under `%TEMP%`, then read into
-the installer payload — the cached `target/release/uninstall.exe` is left
+the installer payload - the cached `target/release/uninstall.exe` is left
 untouched between pack runs. If the source exe has no icon resources, the
 build prints a notice and falls back to the Rust default.
 
 ## File associations
 
 Pass `--assoc ".ext:Description"` (repeatable) to register file types under
-`HKCU\Software\Classes` — per-user, no admin. The shell `open` verb points at
+`HKCU\Software\Classes` - per-user, no admin. The shell `open` verb points at
 the installed `manifest.exe` with `"%1"`.
 
 ```pwsh
@@ -296,10 +296,10 @@ uninstaller never drift apart on file naming.
 
 When installing over an existing version, the installer first makes sure no
 copy of the target exe (`manifest.exe`, matched by full path inside the
-install dir, file-name fallback) is still running — otherwise its files are
+install dir, file-name fallback) is still running - otherwise its files are
 locked.
 
-**Data-safe — the installer never force-kills.** It:
+**Data-safe - the installer never force-kills.** It:
 
 1. Focuses the app's main window and posts `WM_CLOSE`, so the app shows its
    own "save your work?" prompt.
@@ -317,7 +317,7 @@ INFO  target app running (1 process(es)); requesting close (no force)
 INFO  target app closed by user after 6s
 ```
 
-Console / windowless processes have no window to message — the installer
+Console / windowless processes have no window to message - the installer
 simply waits for them to exit (or Cancel). Implementation: [installer/src/proc.rs](installer/src/proc.rs).
 
 ## Crash safety (two-phase commit)
@@ -325,18 +325,18 @@ simply waits for them to exit (or Cancel). Implementation: [installer/src/proc.r
 Installs and patches are transactional. Nothing in the live install is touched
 until every file is built and hash-verified.
 
-**Phase 1 — Stage.** Each new/changed file is produced under
+**Phase 1 - Stage.** Each new/changed file is produced under
 `.installer_tmp/staged/` (full extract, or `hdiff(existing, patch)` for
 patches) and verified by BLAKE3. The existing install is untouched, so a
 cancel or crash here leaves the old version fully intact.
 
-**Phase 2 — Commit.** A `commit.journal` lists every path about to change.
+**Phase 2 - Commit.** A `commit.journal` lists every path about to change.
 Then, per file: the current version is moved to `.installer_tmp/backup/`, and
 the staged file is moved into place. Each move retries for ~5 s to ride out
 transient locks (AV scanner, Explorer, search indexer).
 
-**Verify.** Every staged file is BLAKE3-checked *before* commit. After commit —
-still inside the transaction, backups intact — each committed file is re-read
+**Verify.** Every staged file is BLAKE3-checked *before* commit. After commit -
+still inside the transaction, backups intact - each committed file is re-read
 from its final location and re-hashed, catching any corruption introduced by
 the write/rename itself (bad sector, FS glitch). A mismatch triggers rollback.
 
@@ -345,7 +345,7 @@ is restored from its backup (and brand-new files removed), returning the
 install to its exact pre-install state, then the error is reported.
 
 **Power-loss recovery.** On the next launch, if a `commit.journal` is found,
-the previous run was interrupted mid-commit — the installer rolls back to the
+the previous run was interrupted mid-commit - the installer rolls back to the
 pre-install state from the backups before doing anything else.
 
 State files (`version.json`, `installer_manifest.json`) are written
@@ -362,7 +362,7 @@ patch failures, power loss, and locked/anti-virus-held files.
   can never leave a partial state.
 - **Disk full** mid-stage is detected (`ErrorKind::StorageFull` / Win32 112/39)
   and reported as "free up space and try again" rather than a raw IO error.
-- **Path traversal**: every manifest path is validated (`safe_rel`) — only
+- **Path traversal**: every manifest path is validated (`safe_rel`) - only
   plain relative components, no `..`, absolute roots, or drive letters. The
   payload is Ed25519-signed already; this is defense-in-depth against a
   compromised key or builder bug.
@@ -378,7 +378,7 @@ Estimate = **total install size + 100 MB buffer**, for both full and patch.
 With the two-phase commit, staging writes the *full* content of every changed
 file into `.installer_tmp/staged/` and they coexist until commit; the commit
 itself is rename-only (same volume) so it costs no extra space. A patch's
-staged output is the reconstructed *full* file, not the small patch blob — so
+staged output is the reconstructed *full* file, not the small patch blob - so
 patches need the same headroom as a full install (the old "patch = patch size"
 estimate would under-count and is gone). The figure is conservative:
 hash-skipped unchanged files are counted but never actually staged.
@@ -387,7 +387,7 @@ On failure the installer bails with a human-readable message (shown in the UI
 / printed in silent mode) and logs the figures:
 
 ```
-INFO  disk space: required ~100.3 MB (full, staged worst-case), available 214.51 GB on C:\…\install_target
+INFO  disk space: required ~100.3 MB (full, staged worst-case), available 214.51 GB on C:\...\install_target
 ERROR insufficient disk space: need 2.10 GB but only 512.0 MB free
 ```
 
@@ -401,11 +401,11 @@ write, so even a crashed process leaves a complete file.
 | Operation | Path | Notes |
 |---|---|---|
 | **Install** (any mode) | `<install_dir>\install.log` | Removed by the uninstaller, so it lives exactly as long as the product. |
-| **Uninstall — Stage 1 + Stage 2** | `%TEMP%\rustinst-uninstall-<stage1-pid>.log` | Single combined file. Stage 1's PID is the identifier; Stage 2 receives it as `parent_pid` and appends. Survives the `rmdir` of the install directory. |
+| **Uninstall - Stage 1 + Stage 2** | `%TEMP%\rustinst-uninstall-<stage1-pid>.log` | Single combined file. Stage 1's PID is the identifier; Stage 2 receives it as `parent_pid` and appends. Survives the `rmdir` of the install directory. |
 
 Sample install log:
 ```
-2026-05-30T06:40:54.599Z INFO  install start: product=testapp version=1.0 kind=Full install_dir=C:\…\install_target
+2026-05-30T06:40:54.599Z INFO  install start: product=testapp version=1.0 kind=Full install_dir=C:\...\install_target
 2026-05-30T06:40:54.599Z INFO  payload 201745 bytes, 3 files, deleted 0
 2026-05-30T06:40:54.602Z INFO  extracted: bin/app.exe (360448 bytes)
 2026-05-30T06:40:54.604Z INFO  extracted: data/config.json (9 bytes)
@@ -415,16 +415,16 @@ Sample install log:
 
 Sample uninstall log:
 ```
-2026-05-30T06:42:29.768Z INFO  stage1 start: product=testapp version=1.0 install_dir=C:\…\install_target silent=true
+2026-05-30T06:42:29.768Z INFO  stage1 start: product=testapp version=1.0 install_dir=C:\...\install_target silent=true
 2026-05-30T06:42:29.770Z INFO  removed 3 payload files
 2026-05-30T06:42:29.771Z INFO  removed shortcuts
 2026-05-30T06:42:29.771Z INFO  removed 2 state files
-2026-05-30T06:42:29.772Z INFO  unregistered HKCU\…\Uninstall\testapp
-2026-05-30T06:42:29.822Z INFO  stage2 start: product=testapp install_dir=… parent_pid=Some(27068)
+2026-05-30T06:42:29.772Z INFO  unregistered HKCU\...\Uninstall\testapp
+2026-05-30T06:42:29.822Z INFO  stage2 start: product=testapp install_dir=... parent_pid=Some(27068)
 2026-05-30T06:42:29.845Z INFO  stage2 complete; self scheduled for delete-on-reboot
 ```
 
-Implementation lives in [common/src/log.rs](common/src/log.rs) — global
+Implementation lives in [common/src/log.rs](common/src/log.rs) - global
 `OnceLock<Logger>` with a `Mutex<File>`, three levels (`INFO`/`WARN`/`ERROR`),
 calls before `init()` are no-ops.
 

@@ -16,7 +16,7 @@ fn main() {
 
     let pub_key_hex = env::var("INSTALLER_PUB_KEY").unwrap_or_else(|_| {
         // Zero key = dev mode. Stub refuses to verify any payload at runtime.
-        eprintln!("warning: INSTALLER_PUB_KEY not set — building dev stub (rejects all payloads)");
+        eprintln!("warning: INSTALLER_PUB_KEY not set - building dev stub (rejects all payloads)");
         "0".repeat(64)
     });
 

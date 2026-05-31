@@ -160,7 +160,7 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
     recover_if_interrupted(&temp_dir, &ctx.install_dir);
 
     // Fresh staging + backup areas. A leftover temp here (no commit journal)
-    // means a previous run was interrupted during *staging* — the live install
+    // means a previous run was interrupted during *staging* - the live install
     // was never touched, so we just discard the stale staging and start over.
     // Re-running is the resume path: files already correct are hash-skipped
     // below, so only the remaining work is redone.
@@ -179,7 +179,7 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
     let mut archive =
         ZipArchive::new(Cursor::new(ctx.zip_bytes)).context("open embedded zip")?;
 
-    // Deterministic order — easier UX and reproducible.
+    // Deterministic order - easier UX and reproducible.
     let mut entries: Vec<(&String, &common::models::FileEntry)> =
         manifest.files.iter().collect();
     entries.sort_by(|a, b| a.0.cmp(b.0));
@@ -254,7 +254,7 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
             to_commit.len(),
             deleted.len()
         ));
-        (ctx.on_progress)(total_bytes, total_bytes, "Finalizing…");
+        (ctx.on_progress)(total_bytes, total_bytes, "Finalizing...");
         write_journal(&temp_dir, &to_commit, &deleted)?;
 
         let commit_result = (|| -> Result<()> {
@@ -268,7 +268,7 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
         })();
 
         if let Err(e) = commit_result {
-            common::log::error(format!("commit failed: {e:#} — rolling back"));
+            common::log::error(format!("commit failed: {e:#} - rolling back"));
             rollback(&temp_dir, &ctx.install_dir, &to_commit, &deleted);
             cleanup(&temp_dir);
             return Err(e).context("install failed and was rolled back");
@@ -279,16 +279,16 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
         // this re-reads it from its final location to catch any corruption
         // introduced by the write/rename itself (bad sector, FS glitch). On
         // mismatch we roll back to the previous version.
-        (ctx.on_progress)(total_bytes, total_bytes, "Verifying…");
+        (ctx.on_progress)(total_bytes, total_bytes, "Verifying...");
         if let Err(e) = verify_committed(&ctx.install_dir, manifest, &to_commit) {
-            common::log::error(format!("post-install verification failed: {e:#} — rolling back"));
+            common::log::error(format!("post-install verification failed: {e:#} - rolling back"));
             rollback(&temp_dir, &ctx.install_dir, &to_commit, &deleted);
             cleanup(&temp_dir);
             return Err(e).context("installed files failed verification and were rolled back");
         }
         common::log::info(format!("verified {} committed file(s)", to_commit.len()));
 
-        // Commit done + verified — drop the journal so recovery won't fire, then
+        // Commit done + verified - drop the journal so recovery won't fire, then
         // persist state and clean up. (A crash past this point self-heals on re-run.)
         let _ = fs::remove_file(journal_path(&temp_dir));
     }
@@ -403,7 +403,7 @@ const SPACE_BUFFER: u64 = 100 * 1024 * 1024; // 100 MB
 ///   `.installer_tmp/staged/` and they all coexist until commit. Worst case
 ///   (every file changed) that is the whole install size. For a patch the
 ///   staged output is the reconstructed *full* file, not the small patch blob,
-///   so patches cost the same as a full install here — `total_patch_size`
+///   so patches cost the same as a full install here - `total_patch_size`
 ///   would badly under-estimate.
 /// - **Commit** only renames files within the same volume (dest→backup,
 ///   staged→dest), which consumes no additional space.
@@ -589,7 +589,7 @@ fn rollback(temp_dir: &Path, install_dir: &Path, adds: &[String], deletes: &[Str
                 common::log::error(format!("rollback restore failed for {}: {e:#}", rel));
             }
         } else {
-            // Newly added file with no prior version — remove it.
+            // Newly added file with no prior version - remove it.
             let _ = fs::remove_file(&dest);
         }
     };
@@ -609,7 +609,7 @@ fn recover_if_interrupted(temp_dir: &Path, install_dir: &Path) {
     let Ok(content) = fs::read_to_string(&jp) else {
         return;
     };
-    common::log::warn("found interrupted commit journal — rolling back");
+    common::log::warn("found interrupted commit journal - rolling back");
     let backup_dir = temp_dir.join("backup");
     for rel in content.lines().filter(|l| !l.trim().is_empty()) {
         // Ignore anything that wouldn't be a safe relative path.
@@ -696,7 +696,7 @@ pub fn verify_install(install_dir: &Path) -> Result<()> {
     let manifest_path = install_dir.join("installer_manifest.json");
     let data = fs::read_to_string(&manifest_path).with_context(|| {
         format!(
-            "read {} — is this an installed product directory?",
+            "read {} - is this an installed product directory?",
             manifest_path.display()
         )
     })?;
@@ -747,7 +747,7 @@ pub fn verify_install(install_dir: &Path) -> Result<()> {
         Ok(())
     } else {
         bail!(
-            "verification failed: {} missing, {} corrupt — reinstall or repair",
+            "verification failed: {} missing, {} corrupt - reinstall or repair",
             missing,
             corrupt
         )

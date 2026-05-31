@@ -5,7 +5,7 @@
 //! source (the user's exe) verbatim, preserving each resource's original
 //! identifier (integer id or string name). This makes the target's icon
 //! resource tree identical to the source, so Windows/Explorer pick exactly the
-//! same application icon — no guessing which group is "the" icon, no rebuilt
+//! same application icon - no guessing which group is "the" icon, no rebuilt
 //! group directories that can drift from the source. RT_RCDATA (our payload)
 //! is a different resource type so it never collides.
 

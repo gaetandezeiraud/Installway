@@ -1,6 +1,6 @@
 //! Compact, auto-starting update UI for app-triggered self-updates.
 //!
-//! No license page, no path picker, no Install button — it starts immediately
+//! No license page, no path picker, no Install button - it starts immediately
 //! and just shows progress. Layout:
 //!
 //! ```text

@@ -1,6 +1,6 @@
 //! Win32 UI for the uninstaller. Two phases sharing one HWND:
-//!   - `Confirm` — title + product info + Yes / No buttons
-//!   - `Progress` — title + progress bar + status label
+//!   - `Confirm` - title + product info + Yes / No buttons
+//!   - `Progress` - title + progress bar + status label
 //!
 //! Identical visual style as the installer (Segoe UI, banner strip, ~700×400).
 
@@ -93,7 +93,7 @@ pub struct UninstallParams {
 
 /// Show a single window driving the whole uninstall.
 /// Returns true if user confirmed and the worker ran (the worker may still
-/// have produced internal errors — those are reported via the status label).
+/// have produced internal errors - those are reported via the status label).
 pub fn run(params: UninstallParams) -> bool {
     unsafe {
         let icc = INITCOMMONCONTROLSEX {

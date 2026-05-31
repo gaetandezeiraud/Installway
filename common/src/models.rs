@@ -89,7 +89,7 @@ pub struct InstallInfo {
     pub registry_key: String,
     /// Optional path (relative to install_dir) of the product's main exe.
     pub exe: String,
-    /// File associations registered at install time — the uninstaller removes
+    /// File associations registered at install time - the uninstaller removes
     /// exactly these.
     #[serde(default)]
     pub associations: Vec<FileAssoc>,

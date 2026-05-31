@@ -49,7 +49,7 @@ pub fn load_and_verify() -> Result<LoadedPayload> {
 
 fn verify_signature(signed: &SignedPayload) -> Result<()> {
     if PUB_KEY == [0u8; 32] {
-        bail!("installer was built without INSTALLER_PUB_KEY — refusing to install");
+        bail!("installer was built without INSTALLER_PUB_KEY - refusing to install");
     }
     let key = VerifyingKey::from_bytes(&PUB_KEY).context("invalid embedded public key")?;
     let sig_bytes = hex::decode(&signed.signature_hex).context("decode signature hex")?;

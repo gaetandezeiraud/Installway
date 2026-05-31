@@ -30,7 +30,7 @@ fn run() -> Result<()> {
     let translator = common::i18n::Translator::detect(&args);
 
     // Compact auto-start update UI (app-triggered self-update). Skips license,
-    // path picker and buttons — runs immediately, shows icon + progress.
+    // path picker and buttons - runs immediately, shows icon + progress.
     if let Some(idx) = args.iter().position(|a| a == "--minimal" || a == "/minimal") {
         let path = path_arg(&args, idx)
             .or_else(|| std::env::var("RUSTINSTALLER_PATH").ok())

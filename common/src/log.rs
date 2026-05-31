@@ -2,7 +2,7 @@
 //!
 //! Process-global via `OnceLock<Logger>`; once initialized further
 //! `init()` calls are silently ignored. Safe to call `info/warn/error`
-//! before init — those calls become no-ops. Every write is `flush`ed
+//! before init - those calls become no-ops. Every write is `flush`ed
 //! immediately so a crashed install still leaves a complete log.
 
 use std::fs::{File, OpenOptions};

@@ -31,7 +31,7 @@ pub fn run(install_dir: PathBuf, product: String, parent_pid: Option<u32>) -> Re
     let params = UninstallParams {
         title: tr.fmt("uninstall.stage2_title", &[("product", &product)]),
         subtitle: tr.get("uninstall.stage2_subtitle"),
-        confirm_text: String::new(), // never shown — we auto-advance to Progress
+        confirm_text: String::new(), // never shown - we auto-advance to Progress
         worker: Box::new(move |progress: Arc<dyn Fn(u64, u64, &str) + Send + Sync>| {
             let tr = crate::ui::tr();
             // Wait for Stage 1 to exit so file locks release.

@@ -68,7 +68,7 @@ pub fn generate_patch(old_file: &Path, new_file: &Path, out_file: &Path) -> Resu
     {
         Ok(s) => s,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            // hdiffz.exe not installed — caller falls back to shipping full file.
+            // hdiffz.exe not installed - caller falls back to shipping full file.
             return Ok(false);
         }
         Err(e) => return Err(e).with_context(|| format!("execute {}", hdiffz_path.display())),

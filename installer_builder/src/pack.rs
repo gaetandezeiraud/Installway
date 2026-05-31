@@ -211,7 +211,7 @@ fn build_full(input: &Path, exe: &str, version: &str) -> Result<(Vec<u8>, Manife
         .map(|(rel, entry, _)| (rel, entry))
         .collect();
 
-    // Re-read files for zipping (sequential — zip crate isn't thread-safe writer).
+    // Re-read files for zipping (sequential - zip crate isn't thread-safe writer).
     let zip_bytes = write_zip(input, &files, &[], &HashMap::new())?;
 
     let manifest = Manifest {
@@ -239,7 +239,7 @@ fn build_patch(
         let hd = exe_dir.join("hdiffz.exe");
         if !hd.exists() {
             eprintln!(
-                "warning: {} not found — patch payload will ship full files instead of HDiffPatch deltas",
+                "warning: {} not found - patch payload will ship full files instead of HDiffPatch deltas",
                 hd.display()
             );
         }
@@ -300,7 +300,7 @@ fn build_patch(
             let old_abs = old_input.join(rel);
             let old_hash = file_blake3(&old_abs)?;
             if old_hash == new_hash {
-                // Unchanged — no payload entry needed.
+                // Unchanged - no payload entry needed.
                 return Ok(WorkOut {
                     rel: rel.clone(),
                     entry: FileEntry { hash: new_hash, size: new_size, patch: None },
@@ -335,7 +335,7 @@ fn build_patch(
                         full_needed: false,
                     });
                 }
-                // Patch wasn't smaller — fall through to full.
+                // Patch wasn't smaller - fall through to full.
                 let _ = fs::remove_file(&patch_path);
             }
 
@@ -505,11 +505,11 @@ fn parse_assocs(raw: &[String], product: &str) -> Result<Vec<FileAssoc>> {
     Ok(out)
 }
 
-/// First non-empty line of `s`, truncated to 60 chars — used for log preview.
+/// First non-empty line of `s`, truncated to 60 chars - used for log preview.
 fn trimmed_title(s: &str) -> String {
     let line = s.lines().find(|l| !l.trim().is_empty()).unwrap_or("").trim();
     if line.chars().count() > 60 {
-        format!("{}…", line.chars().take(60).collect::<String>())
+        format!("{}...", line.chars().take(60).collect::<String>())
     } else {
         line.to_string()
     }

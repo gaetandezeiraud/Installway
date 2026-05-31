@@ -1,7 +1,7 @@
 //! Per-user shortcut paths (Desktop + Start Menu).
 //!
 //! Same layout the launcher uses so behaviour matches across both tools.
-//! Returned paths are the canonical `.lnk` locations — exists-check left to caller.
+//! Returned paths are the canonical `.lnk` locations - exists-check left to caller.
 
 use std::path::PathBuf;
 

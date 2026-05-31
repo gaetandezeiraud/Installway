@@ -1,9 +1,9 @@
 # English (default / fallback)
 
 [install]
-window_title = "{product} {version} — Setup"
+window_title = "{product} {version} - Setup"
 header = "Install {product} {version}"
-sub_full = "Welcome — fresh installation"
+sub_full = "Welcome - fresh installation"
 sub_patch = "Update {from} → {to}"
 license_accept = "I accept the terms of the license agreement"
 choose_label = "Install location:"
@@ -34,9 +34,9 @@ no = "No"
 removing = "Removing {file}"
 removing_shortcuts = "Removing shortcuts"
 removing_state = "Removing state files"
-finalizing = "Finalizing…"
+finalizing = "Finalizing..."
 stage2_title = "Removing {product}"
-stage2_subtitle = "Finalizing uninstall…"
+stage2_subtitle = "Finalizing uninstall..."
 waiting = "Waiting for installer to exit"
 removing_uninstaller = "Removing uninstaller"
 removing_state2 = "Removing state"

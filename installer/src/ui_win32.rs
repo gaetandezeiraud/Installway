@@ -67,7 +67,7 @@ const PAD: i32 = 24;
 const ACCENT_LIGHT: u32 = 0x00F3F3F3; // light gray banner card
 
 const LOREM: &str =
-"END USER LICENSE AGREEMENT — SAMPLE\r\n\r\n\
+"END USER LICENSE AGREEMENT - SAMPLE\r\n\r\n\
 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod \
 tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, \
 quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo \
@@ -291,7 +291,7 @@ unsafe fn build_controls(hwnd: HWND, payload: &InstallerPayload, default_path: &
     let cancel_w = wide(&tr.get("install.cancel"));
     let finish_w = wide(&tr.get("install.finish"));
 
-    // Banner background — a wide empty STATIC; WM_CTLCOLORSTATIC paints it.
+    // Banner background - a wide empty STATIC; WM_CTLCOLORSTATIC paints it.
     let banner_w: Vec<u16> = "".encode_utf16().chain(std::iter::once(0)).collect();
     unsafe {
         let _ = CreateWindowExW(
@@ -815,7 +815,7 @@ unsafe fn on_install(hwnd: HWND) {
             .map(|st| (st.borrow().cancel.clone(), st.borrow().progress.clone()))
     });
     let Some((cancel, progress_shared)) = shared else {
-        return; // STATE not initialized — nothing to do.
+        return; // STATE not initialized - nothing to do.
     };
     let hwnd_isize = hwnd.0 as isize;
 

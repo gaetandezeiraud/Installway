@@ -1,6 +1,6 @@
 //! Close a running copy of the app we are about to install over.
 //!
-//! Data-safe by design — we NEVER force-terminate:
+//! Data-safe by design - we NEVER force-terminate:
 //!   1. Find every process whose exe is the one we're updating
 //!      (match by full path inside `install_dir`, fall back to file name).
 //!   2. Focus its main window and post `WM_CLOSE` so the app runs its own
@@ -72,7 +72,7 @@ pub fn ensure_closed(
         "target app running ({} process(es)); requesting close (no force)",
         pids.len()
     ));
-    status(&format!("Please close {} to continue…", app));
+    status(&format!("Please close {} to continue...", app));
 
     // First close request: focus each window + WM_CLOSE.
     nudge(&pids);
@@ -100,7 +100,7 @@ pub fn ensure_closed(
         if last_nudge.elapsed() >= NUDGE {
             nudge(&pids);
             last_nudge = Instant::now();
-            status(&format!("Waiting for {} to close…", app));
+            status(&format!("Waiting for {} to close...", app));
         }
 
         thread::sleep(POLL);

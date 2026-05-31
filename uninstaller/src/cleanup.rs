@@ -15,7 +15,7 @@ pub fn current_install_dir() -> Result<PathBuf> {
 pub fn read_info(install_dir: &Path) -> Result<InstallInfo> {
     let p = install_dir.join("installer_info.json");
     let s = fs::read_to_string(&p)
-        .with_context(|| format!("read {} — is this an installed product?", p.display()))?;
+        .with_context(|| format!("read {} - is this an installed product?", p.display()))?;
     serde_json::from_str(&s).context("parse installer_info.json")
 }
 
