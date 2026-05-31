@@ -215,7 +215,7 @@ fn spawn_worker(
         let ctx = InstallCtx {
             install_dir: install_dir.clone(),
             payload: &loaded.payload,
-            zip_bytes: &loaded.zip_bytes,
+            zip_bytes: loaded.zip(),
             cancel,
             on_progress: prog_cb,
         };

@@ -1,12 +1,21 @@
 use anyhow::{Context, Result, bail};
 use std::path::Path;
 
+/// Magic at the start of the appended payload overlay, so the installer can
+/// sanity-check it found the right region.
+pub const OVERLAY_MAGIC: &[u8; 8] = b"RIIPLD01";
+
+/// Embed the small resources via the Win32 resource API: signed manifest
+/// (id=2), uninstaller (id=3), and the payload length (id=4). The big payload
+/// zip is NOT a resource - it's appended as a PE overlay by `append_payload`,
+/// which has no size ceiling and lets the installer mmap it instead of loading
+/// gigabytes into RAM.
 #[cfg(windows)]
 pub fn embed_resources(
     exe: &Path,
-    payload_zip: &[u8],
     signed_json: &[u8],
     uninstaller_exe: &[u8],
+    payload_len: u64,
 ) -> Result<()> {
     use windows::Win32::System::LibraryLoader::{
         BeginUpdateResourceW, EndUpdateResourceW, UpdateResourceW,
@@ -28,50 +37,53 @@ pub fn embed_resources(
         const RT_RCDATA: u16 = 10;
         const LANG_NEUTRAL: u16 = 0;
 
-        // RCDATA id=1 → payload zip
-        UpdateResourceW(
-            h,
-            PCWSTR(RT_RCDATA as usize as *const u16),
-            PCWSTR(1usize as *const u16),
-            LANG_NEUTRAL,
-            Some(payload_zip.as_ptr() as *const _),
-            payload_zip.len() as u32,
-        )
-        .context("UpdateResource id=1 (payload)")?;
+        let put = |id: u16, data: &[u8], what: &str| -> Result<()> {
+            UpdateResourceW(
+                h,
+                PCWSTR(RT_RCDATA as usize as *const u16),
+                PCWSTR(id as usize as *const u16),
+                LANG_NEUTRAL,
+                Some(data.as_ptr() as *const _),
+                data.len() as u32,
+            )
+            .with_context(|| format!("UpdateResource id={} ({})", id, what))
+        };
 
-        // RCDATA id=2 → signed manifest JSON
-        UpdateResourceW(
-            h,
-            PCWSTR(RT_RCDATA as usize as *const u16),
-            PCWSTR(2usize as *const u16),
-            LANG_NEUTRAL,
-            Some(signed_json.as_ptr() as *const _),
-            signed_json.len() as u32,
-        )
-        .context("UpdateResource id=2 (signed manifest)")?;
-
-        // RCDATA id=3 → uninstaller binary
-        UpdateResourceW(
-            h,
-            PCWSTR(RT_RCDATA as usize as *const u16),
-            PCWSTR(3usize as *const u16),
-            LANG_NEUTRAL,
-            Some(uninstaller_exe.as_ptr() as *const _),
-            uninstaller_exe.len() as u32,
-        )
-        .context("UpdateResource id=3 (uninstaller)")?;
+        put(2, signed_json, "signed manifest")?;
+        put(3, uninstaller_exe, "uninstaller")?;
+        put(4, &payload_len.to_le_bytes(), "payload length")?;
 
         EndUpdateResourceW(h, false).context("EndUpdateResource")?;
     }
     Ok(())
 }
 
+/// Append the payload zip as a PE overlay: `MAGIC || zip`, written straight to
+/// the end of the file. Streaming, no resource-size limit. Must run AFTER all
+/// `UpdateResource`/version/icon passes (those rewrite the PE and would drop a
+/// pre-existing overlay) and BEFORE Authenticode signing (signtool appends its
+/// certificate table after the overlay; the installer locates the overlay from
+/// the PE section table, not the end of file, so a trailing cert is harmless).
+pub fn append_payload(exe: &Path, payload_zip: &[u8]) -> Result<()> {
+    use std::fs::OpenOptions;
+    use std::io::Write;
+
+    let mut f = OpenOptions::new()
+        .append(true)
+        .open(exe)
+        .with_context(|| format!("open {} for overlay append", exe.display()))?;
+    f.write_all(OVERLAY_MAGIC).context("write overlay magic")?;
+    f.write_all(payload_zip).context("write overlay payload")?;
+    f.flush().ok();
+    Ok(())
+}
+
 #[cfg(not(windows))]
 pub fn embed_resources(
     _exe: &Path,
-    _payload_zip: &[u8],
     _signed_json: &[u8],
     _uninstaller_exe: &[u8],
+    _payload_len: u64,
 ) -> Result<()> {
     bail!("embed_resources is Windows-only")
 }

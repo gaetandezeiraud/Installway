@@ -848,7 +848,7 @@ unsafe fn on_install(hwnd: HWND) {
         let ctx = InstallCtx {
             install_dir: pb.clone(),
             payload: &loaded.payload,
-            zip_bytes: &loaded.zip_bytes,
+            zip_bytes: loaded.zip(),
             cancel: cancel.clone(),
             on_progress: progress_cb,
         };

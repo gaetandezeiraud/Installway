@@ -82,7 +82,7 @@ fn run() -> Result<()> {
             },
             loaded.payload.from_version.clone().unwrap_or_else(|| "(fresh)".to_string()),
             loaded.payload.to_version,
-            loaded.zip_bytes.len(),
+            loaded.zip().len(),
             license,
         );
         return Ok(());
@@ -129,7 +129,7 @@ fn run_silent(
     let ctx = extract::InstallCtx {
         install_dir: install_dir.clone(),
         payload: &loaded.payload,
-        zip_bytes: &loaded.zip_bytes,
+        zip_bytes: loaded.zip(),
         cancel: Arc::new(AtomicBool::new(false)),
         on_progress: progress,
     };

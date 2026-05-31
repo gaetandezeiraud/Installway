@@ -4,8 +4,10 @@ Local, single-file `.exe` installer in the style of InstallShield / MSI - but
 written in Rust and built around the same BLAKE3 + HDiffPatch manifest format
 used by the sibling RustUpdater project.
 
-Each output `.exe` carries its own payload (a zip + a signed manifest) embedded
-as Win32 `RT_RCDATA` resources. No network, no admin elevation, no MSI runtime.
+Each output `.exe` carries its own payload: the file zip is appended as a PE
+**overlay** (no size ceiling, streamed on at build, mmap-read at install), while
+the signed manifest, the uninstaller and the payload length ride as small
+`RT_RCDATA` resources. No network, no admin elevation, no MSI runtime.
 
 ## Workspace
 
@@ -381,6 +383,25 @@ INFO  target app closed by user after 6s
 
 Console / windowless processes have no window to message - the installer
 simply waits for them to exit (or Cancel). Implementation: [installer/src/proc.rs](installer/src/proc.rs).
+
+## Large payloads
+
+The file zip is **not** a resource - `UpdateResource` buffers everything in RAM
+and has a practical size ceiling. Instead it's appended as a PE overlay:
+
+- **Build**: streamed onto the end of the exe after all resource passes
+  (manifest/uninstaller/icon/version), before signing. No size limit.
+- **Locate**: the installer finds the overlay from the PE **section table**
+  (end of last section's raw data), so a trailing Authenticode certificate
+  appended by `signtool` doesn't disturb it. A magic + a length stored in
+  `RT_RCDATA` id=4 validate the region.
+- **Read**: the installer **mmaps** the overlay (zero-copy, OS demand-paged) and
+  each file is streamed from the zip to disk in ~1 MB chunks, hashed inline.
+
+Result: multi-GB installers work with roughly constant working memory.
+Measured: a 1.2 GB payload installs at ~1.1 GB peak working set - and that's
+mostly the reclaimable file-cache from the BLAKE3 integrity scan, not a hard
+allocation.
 
 ## Crash safety (two-phase commit)
 

@@ -414,22 +414,37 @@ fn stage_file(
         }
     }
 
-    // Full file from zip.
+    // Full file from zip - streamed in chunks so a huge file never lands fully
+    // in RAM (constant ~1 MB buffer), hashed inline as it's written.
     let zip_rel = format!("{}{}", FULL_PREFIX, rel);
-    let bytes = read_from_zip(archive, &zip_rel)
-        .with_context(|| format!("read {} from embedded zip", zip_rel))?;
-    let actual = blake3::hash(&bytes).to_hex().to_string();
+    let mut entry_rdr = archive
+        .by_name(&zip_rel)
+        .with_context(|| format!("{} not in zip", zip_rel))?;
+    let mut out = File::create(staged_path)
+        .map_err(|e| anyhow::anyhow!("{}", io_msg("creating", staged_path, &e)))?;
+    let mut hasher = blake3::Hasher::new();
+    let mut buf = vec![0u8; 1024 * 1024];
+    loop {
+        let n = entry_rdr
+            .read(&mut buf)
+            .with_context(|| format!("read {} from embedded zip", zip_rel))?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+        out.write_all(&buf[..n])
+            .map_err(|e| anyhow::anyhow!("{}", io_msg("writing", staged_path, &e)))?;
+    }
+    drop(out);
+    let actual = hasher.finalize().to_hex().to_string();
     if actual != entry.hash {
         common::log::error(format!(
             "zip vs manifest hash mismatch: {} (zip={} manifest={})",
             rel, actual, entry.hash
         ));
+        let _ = fs::remove_file(staged_path);
         bail!("hash mismatch for {} (zip vs manifest)", rel);
     }
-    let mut f = File::create(staged_path)
-        .map_err(|e| anyhow::anyhow!("{}", io_msg("creating", staged_path, &e)))?;
-    f.write_all(&bytes)
-        .map_err(|e| anyhow::anyhow!("{}", io_msg("writing", staged_path, &e)))?;
     common::log::info(format!("staged (full): {} ({} bytes)", rel, entry.size));
     Ok(())
 }

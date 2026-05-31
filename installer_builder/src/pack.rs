@@ -151,7 +151,13 @@ pub fn run(args: &PackArgs) -> Result<()> {
     fs::copy(&stub, &args.out).with_context(|| format!("copy {} -> {}", stub.display(), args.out.display()))?;
     println!("Copied stub to {}", args.out.display());
 
-    embed::embed_resources(&args.out, &zip_bytes, signed_json.as_bytes(), &uninstaller_bytes)?;
+    // Small resources via the resource API (manifest, uninstaller, payload len).
+    embed::embed_resources(
+        &args.out,
+        signed_json.as_bytes(),
+        &uninstaller_bytes,
+        zip_bytes.len() as u64,
+    )?;
     #[cfg(windows)]
     if let Some(i) = &icons {
         if let Err(e) = crate::icon::embed_icons(&args.out, i) {
@@ -165,9 +171,13 @@ pub fn run(args: &PackArgs) -> Result<()> {
     {
         eprintln!("warning: version-info embed failed: {e:#}");
     }
+    // Big payload appended as a PE overlay - AFTER all resource passes, so they
+    // don't drop it; BEFORE signing. No size ceiling; installer mmaps it.
+    embed::append_payload(&args.out, &zip_bytes)?;
     println!(
-        "Embedded payload + signed manifest + uninstaller{} + version into {}",
+        "Embedded signed manifest + uninstaller{} + version, appended {}-byte payload overlay into {}",
         if icons.is_some() { " + icon" } else { "" },
+        zip_bytes.len(),
         args.out.display()
     );
 

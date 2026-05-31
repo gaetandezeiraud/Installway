@@ -4,17 +4,43 @@ use ed25519_dalek::{Signature, VerifyingKey, Verifier};
 
 include!(concat!(env!("OUT_DIR"), "/pub_key.rs"));
 
+/// Must match `installer_builder::embed::OVERLAY_MAGIC`.
+const OVERLAY_MAGIC: &[u8; 8] = b"RIIPLD01";
+
 pub struct LoadedPayload {
     pub payload: InstallerPayload,
-    pub zip_bytes: Vec<u8>,
     pub uninstaller_bytes: Vec<u8>,
+    /// The whole exe, memory-mapped. The payload zip is a slice into this, so
+    /// even multi-GB payloads stay demand-paged instead of copied into RAM.
+    #[cfg(windows)]
+    map: memmap2::Mmap,
+    #[cfg(windows)]
+    zip_off: usize,
+    #[cfg(windows)]
+    zip_len: usize,
+}
+
+impl LoadedPayload {
+    /// Borrowed view of the payload zip (mmap-backed; no heap copy).
+    #[cfg(windows)]
+    pub fn zip(&self) -> &[u8] {
+        &self.map[self.zip_off..self.zip_off + self.zip_len]
+    }
+    #[cfg(not(windows))]
+    pub fn zip(&self) -> &[u8] {
+        &[]
+    }
 }
 
 #[cfg(windows)]
 pub fn load_and_verify() -> Result<LoadedPayload> {
-    let zip_bytes = read_resource(1)?;
     let signed_bytes = read_resource(2)?;
     let uninstaller_bytes = read_resource(3)?;
+    let payload_len = read_resource(4)?;
+    if payload_len.len() != 8 {
+        bail!("payload-length resource malformed");
+    }
+    let zip_len = u64::from_le_bytes(payload_len[..8].try_into().unwrap()) as usize;
 
     let signed: SignedPayload =
         serde_json::from_slice(&signed_bytes).context("parse signed payload JSON")?;
@@ -24,10 +50,32 @@ pub fn load_and_verify() -> Result<LoadedPayload> {
     let payload: InstallerPayload =
         serde_json::from_str(&signed.payload_json).context("parse inner payload JSON")?;
 
-    let actual_hash = blake3::hash(&zip_bytes).to_hex().to_string();
+    // Map our own exe and locate the overlay from the PE section table (robust
+    // to a trailing Authenticode certificate appended after the overlay).
+    let exe = std::env::current_exe().context("locate own exe")?;
+    let file = std::fs::File::open(&exe).with_context(|| format!("open {}", exe.display()))?;
+    let map = unsafe { memmap2::Mmap::map(&file) }.context("mmap own exe")?;
+
+    let overlay_start = pe_overlay_offset(&map).context("locate payload overlay in PE")?;
+    let magic_end = overlay_start + OVERLAY_MAGIC.len();
+    if map.len() < magic_end || &map[overlay_start..magic_end] != OVERLAY_MAGIC {
+        bail!("payload overlay missing or corrupt (bad magic)");
+    }
+    let zip_off = magic_end;
+    if map.len() < zip_off + zip_len {
+        bail!(
+            "payload overlay truncated: need {} bytes from offset {}, file is {}",
+            zip_len,
+            zip_off,
+            map.len()
+        );
+    }
+
+    // Verify BLAKE3 of the payload (streamed over the mmap, not copied).
+    let actual_hash = blake3::hash(&map[zip_off..zip_off + zip_len]).to_hex().to_string();
     if actual_hash != payload.payload_blake3 {
         bail!(
-            "payload hash mismatch: manifest declared {} but RCDATA hashes to {}",
+            "payload hash mismatch: manifest declared {} but overlay hashes to {}",
             payload.payload_blake3,
             actual_hash
         );
@@ -37,14 +85,48 @@ pub fn load_and_verify() -> Result<LoadedPayload> {
 
     Ok(LoadedPayload {
         payload,
-        zip_bytes,
         uninstaller_bytes,
+        map,
+        zip_off,
+        zip_len,
     })
 }
 
 #[cfg(not(windows))]
 pub fn load_and_verify() -> Result<LoadedPayload> {
     bail!("installer is Windows-only")
+}
+
+/// Offset where the PE image ends on disk = max(PointerToRawData + SizeOfRawData)
+/// over all sections. Anything after that (our overlay, then optionally an
+/// Authenticode cert table) is appended data.
+#[cfg(windows)]
+fn pe_overlay_offset(data: &[u8]) -> Result<usize> {
+    if data.len() < 0x40 || &data[0..2] != b"MZ" {
+        bail!("not a PE (no MZ)");
+    }
+    let e_lfanew = u32::from_le_bytes(data[0x3C..0x40].try_into().unwrap()) as usize;
+    if data.len() < e_lfanew + 24 || &data[e_lfanew..e_lfanew + 4] != b"PE\0\0" {
+        bail!("not a PE (no PE signature)");
+    }
+    let coff = e_lfanew + 4;
+    let num_sections = u16::from_le_bytes(data[coff + 2..coff + 4].try_into().unwrap()) as usize;
+    let opt_size = u16::from_le_bytes(data[coff + 16..coff + 18].try_into().unwrap()) as usize;
+    let sect_start = coff + 20 + opt_size;
+    let mut end = 0usize;
+    for i in 0..num_sections {
+        let s = sect_start + i * 40;
+        if data.len() < s + 40 {
+            bail!("section header out of range");
+        }
+        let size_raw = u32::from_le_bytes(data[s + 16..s + 20].try_into().unwrap()) as usize;
+        let ptr_raw = u32::from_le_bytes(data[s + 20..s + 24].try_into().unwrap()) as usize;
+        end = end.max(ptr_raw.saturating_add(size_raw));
+    }
+    if end == 0 || end > data.len() {
+        bail!("computed overlay offset {} invalid (file {})", end, data.len());
+    }
+    Ok(end)
 }
 
 fn verify_signature(signed: &SignedPayload) -> Result<()> {
