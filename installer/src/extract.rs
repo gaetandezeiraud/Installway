@@ -129,6 +129,8 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
         &ctx.payload.product,
         std::process::id(),
     ));
+    // Self-clean: drop this product's stale %TEMP% logs (> 14 days).
+    common::log::prune_temp_logs(&ctx.payload.product, 14);
     let started = std::time::Instant::now();
     common::log::info(format!(
         "install start: product={} version={} kind={:?} install_dir={}",

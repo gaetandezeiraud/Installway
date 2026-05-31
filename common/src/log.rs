@@ -138,3 +138,38 @@ pub fn log_path_for_stage2(product: &str, pid: u32) -> PathBuf {
     let name = crate::paths::sanitize_component(product);
     std::env::temp_dir().join(format!("{}-uninstall-{}.log", name, pid))
 }
+
+/// Delete this product's `%TEMP%` install/uninstall logs older than
+/// `max_age_days`, so they don't accumulate over a machine's lifetime.
+/// Best-effort: any error (locked file, unreadable mtime) is ignored.
+#[allow(dead_code)]
+pub fn prune_temp_logs(product: &str, max_age_days: u64) {
+    let name = crate::paths::sanitize_component(product);
+    let install_prefix = format!("{}-install-", name);
+    let uninstall_prefix = format!("{}-uninstall-", name);
+    let max_age = std::time::Duration::from_secs(max_age_days * 24 * 60 * 60);
+    let now = SystemTime::now();
+
+    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let fname = entry.file_name();
+        let fname = fname.to_string_lossy();
+        let ours = (fname.starts_with(&install_prefix) || fname.starts_with(&uninstall_prefix))
+            && fname.ends_with(".log");
+        if !ours {
+            continue;
+        }
+        let age = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| now.duration_since(t).ok());
+        if let Some(age) = age {
+            if age > max_age {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+}

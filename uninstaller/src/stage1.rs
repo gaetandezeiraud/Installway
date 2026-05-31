@@ -30,6 +30,8 @@ pub fn run(silent: bool) -> Result<()> {
         &product_hint,
         std::process::id(),
     ));
+    // Self-clean: drop this product's stale %TEMP% logs (> 14 days).
+    common::log::prune_temp_logs(&product_hint, 14);
 
     // If the metadata is gone, just remove leftovers quietly (no error dialog).
     let info = match cleanup::read_info(&data_dir) {
