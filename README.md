@@ -1,4 +1,4 @@
-# RustIInstaller
+# RustInstaller
 
 Local, single-file `.exe` installer in the style of InstallShield / MSI - but
 written in Rust and built around the same BLAKE3 + HDiffPatch manifest format
