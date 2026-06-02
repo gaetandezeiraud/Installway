@@ -4,8 +4,7 @@ mod extract;
 mod install;
 mod payload;
 mod proc;
-mod ui_minimal;
-mod ui_win32;
+mod ui;
 
 use anyhow::{Context, Result};
 use std::path::PathBuf;
@@ -41,7 +40,7 @@ fn run() -> Result<()> {
         let path = path_arg(&args, idx)
             .or_else(|| std::env::var("RUSTINSTALLER_PATH").ok())
             .unwrap_or_else(|| default_install_path(&loaded.payload.product).to_string_lossy().into_owned());
-        return ui_minimal::run(loaded, PathBuf::from(path), launch, translator);
+        return ui::minimal::run(loaded, PathBuf::from(path), launch, translator);
     }
 
     if let Some(idx) = args.iter().position(|a| a == "--silent" || a == "/S") {
@@ -82,7 +81,7 @@ fn run() -> Result<()> {
     }
 
     let default_path = default_install_path(&loaded.payload.product);
-    ui_win32::run(loaded, default_path, launch, translator)?;
+    ui::win32::run(loaded, default_path, launch, translator)?;
     Ok(())
 }
 

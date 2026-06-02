@@ -16,28 +16,25 @@
 
 use crate::extract::{InstallCtx, install};
 use crate::payload::LoadedPayload;
+use crate::ui::helpers::{
+    self, WM_APP_DONE, WM_APP_ERROR, WM_APP_PROGRESS, create_font, own_icon, post, scale_progress,
+    set_dlg_text, set_progress, wide,
+};
 use anyhow::Result;
 use std::cell::RefCell;
-use std::ffi::OsStr;
-use std::os::windows::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use std::thread;
-use windows::Win32::Foundation::{COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WPARAM};
+use windows::Win32::Foundation::{COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
-    CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, CreateFontW, CreateSolidBrush, DEFAULT_CHARSET,
-    DEFAULT_PITCH, DeleteObject, FF_DONTCARE, FW_NORMAL, FW_SEMIBOLD, GetStockObject, HBRUSH, HFONT,
-    OUT_DEFAULT_PRECIS, SetBkMode, SetTextColor, TRANSPARENT, WHITE_BRUSH,
+    CreateSolidBrush, DeleteObject, FW_NORMAL, FW_SEMIBOLD, GetStockObject, HBRUSH, HFONT, SetBkMode,
+    SetTextColor, TRANSPARENT, WHITE_BRUSH,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::UI::Controls::{
-    ICC_PROGRESS_CLASS, INITCOMMONCONTROLSEX, InitCommonControlsEx, PBM_SETPOS, PBM_SETRANGE32,
-    PROGRESS_CLASSW,
-};
-use windows::Win32::UI::Shell::ExtractIconW;
+use windows::Win32::UI::Controls::PROGRESS_CLASSW;
 use windows::Win32::UI::WindowsAndMessaging::*;
 use windows::core::{PCWSTR, w};
 
@@ -46,10 +43,6 @@ const ID_TITLE: usize = 2;
 const ID_SUB: usize = 3;
 const ID_PROGRESS: usize = 4;
 const ID_STATUS: usize = 5;
-
-const WM_APP_PROGRESS: u32 = WM_APP + 1;
-const WM_APP_DONE: u32 = WM_APP + 2;
-const WM_APP_ERROR: u32 = WM_APP + 3;
 
 const STM_SETICON: u32 = 0x0170;
 const SS_ICON: u32 = 0x0003;
@@ -99,8 +92,7 @@ pub fn run(
     // Worker runs in safe code; only the message posts touch FFI.
     spawn_worker(win.hwnd_isize, install_dir, launch_flag, win.cancel, win.prog);
 
-    // Standard message pump.
-    unsafe { pump_messages() };
+    unsafe { helpers::pump_messages() };
     Ok(())
 }
 
@@ -111,11 +103,7 @@ struct Window {
 }
 
 unsafe fn build_window(payload: &common::models::InstallerPayload) -> Result<Window> {
-    let icc = INITCOMMONCONTROLSEX {
-        dwSize: std::mem::size_of::<INITCOMMONCONTROLSEX>() as u32,
-        dwICC: ICC_PROGRESS_CLASS,
-    };
-    let _ = unsafe { InitCommonControlsEx(&icc) };
+    helpers::init_progress_class();
     let hinstance = unsafe { GetModuleHandleW(PCWSTR::null()) }?;
 
     let class_name = w!("RustInstallerMiniWnd");
@@ -135,7 +123,6 @@ unsafe fn build_window(payload: &common::models::InstallerPayload) -> Result<Win
     };
     unsafe { RegisterClassExW(&wc) };
 
-    // App icon = our own embedded icon (copied from the product exe at build).
     let hicon = unsafe { own_icon() };
 
     let title_w = wide(&tr().get("install.minimal_title"));
@@ -177,7 +164,7 @@ unsafe fn build_window(payload: &common::models::InstallerPayload) -> Result<Win
     }
 
     unsafe {
-        center(hwnd);
+        helpers::center(hwnd);
         build_controls(hwnd, payload);
         let _ = ShowWindow(hwnd, SW_SHOW);
     }
@@ -232,23 +219,6 @@ fn spawn_worker(
     });
 }
 
-unsafe fn pump_messages() {
-    let mut msg = MSG::default();
-    unsafe {
-        while GetMessageW(&mut msg, None, 0, 0).into() {
-            let _ = TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-    }
-}
-
-/// Post a no-payload app message to the window thread (thread-safe FFI).
-fn post(hwnd_isize: isize, msg: u32) {
-    let _ = unsafe {
-        PostMessageW(Some(HWND(hwnd_isize as *mut _)), msg, WPARAM(0), LPARAM(0))
-    };
-}
-
 fn post_err(hwnd_isize: isize, msg: &str) {
     STATE.with(|s| {
         if let Some(st) = s.borrow().as_ref() {
@@ -256,18 +226,6 @@ fn post_err(hwnd_isize: isize, msg: &str) {
         }
     });
     post(hwnd_isize, WM_APP_ERROR);
-}
-
-unsafe fn own_icon() -> HICON {
-    unsafe {
-        let Ok(exe) = std::env::current_exe() else {
-            return HICON::default();
-        };
-        let w: Vec<u16> = exe.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
-        let hmod = GetModuleHandleW(PCWSTR::null()).unwrap_or_default();
-        // Index 0 = the application's primary icon (we embed the product's).
-        ExtractIconW(Some(HINSTANCE(hmod.0)), PCWSTR(w.as_ptr()), 0)
-    }
 }
 
 unsafe fn build_controls(hwnd: HWND, payload: &common::models::InstallerPayload) {
@@ -371,21 +329,12 @@ unsafe fn build_controls(hwnd: HWND, payload: &common::models::InstallerPayload)
         if let Some(st) = s.borrow().as_ref() {
             let st = st.borrow();
             unsafe {
-                set_font(hwnd, ID_TITLE, st.font_title);
-                set_font(hwnd, ID_SUB, st.font_body);
-                set_font(hwnd, ID_STATUS, st.font_body);
+                helpers::set_font(hwnd, ID_TITLE, st.font_title);
+                helpers::set_font(hwnd, ID_SUB, st.font_body);
+                helpers::set_font(hwnd, ID_STATUS, st.font_body);
             }
         }
     });
-}
-
-unsafe fn set_font(hwnd: HWND, id: usize, font: HFONT) {
-    unsafe {
-        let h = GetDlgItem(Some(hwnd), id as i32).unwrap_or_default();
-        if !h.is_invalid() {
-            SendMessageW(h, WM_SETFONT, Some(WPARAM(font.0 as usize)), Some(LPARAM(1)));
-        }
-    }
 }
 
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
@@ -411,8 +360,8 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             LRESULT(0)
         },
         m if m == WM_APP_DONE => unsafe {
-            set_text(hwnd, ID_STATUS, &tr().get("install.minimal_done"));
-            set_bar(hwnd, 10000);
+            set_dlg_text(hwnd, ID_STATUS, &tr().get("install.minimal_done"));
+            set_progress(hwnd, ID_PROGRESS, 10000);
             // Brief pause so the user sees 100%, then close.
             let _ = SetTimer(Some(hwnd), 1, 900, None);
             LRESULT(0)
@@ -426,7 +375,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             STATE.with(|s| {
                 if let Some(st) = s.borrow().as_ref() {
                     let e = st.borrow().error.clone();
-                    set_text(hwnd, ID_STATUS, &format!("{}{}", tr().get("install.err_prefix"), e));
+                    set_dlg_text(hwnd, ID_STATUS, &format!("{}{}", tr().get("install.err_prefix"), e));
                 }
             });
             LRESULT(0)
@@ -459,55 +408,9 @@ unsafe fn update_progress(hwnd: HWND) {
             Ok(p) => (p.done, p.total, p.name.clone()),
             Err(_) => return,
         };
-        let total = if total == 0 { 1 } else { total };
-        let scaled = ((done as u128 * 10000u128) / total as u128) as i32;
-        unsafe { set_bar(hwnd, scaled) };
+        let scaled = scale_progress(done, total);
+        unsafe { set_progress(hwnd, ID_PROGRESS, scaled) };
         let pct = scaled / 100;
-        let txt = format!("{}%  {}", pct, name);
-        unsafe { set_text(hwnd, ID_STATUS, &txt) };
+        unsafe { set_dlg_text(hwnd, ID_STATUS, &format!("{}%  {}", pct, name)) };
     });
-}
-
-unsafe fn set_bar(hwnd: HWND, scaled: i32) {
-    unsafe {
-        let bar = GetDlgItem(Some(hwnd), ID_PROGRESS as i32).unwrap_or_default();
-        SendMessageW(bar, PBM_SETRANGE32, Some(WPARAM(0)), Some(LPARAM(10000)));
-        SendMessageW(bar, PBM_SETPOS, Some(WPARAM(scaled as usize)), Some(LPARAM(0)));
-    }
-}
-
-unsafe fn set_text(hwnd: HWND, id: usize, s: &str) {
-    unsafe {
-        let h = GetDlgItem(Some(hwnd), id as i32).unwrap_or_default();
-        let w = wide(s);
-        let _ = SetWindowTextW(h, PCWSTR(w.as_ptr()));
-    }
-}
-
-unsafe fn center(hwnd: HWND) {
-    let mut rect = RECT::default();
-    unsafe { let _ = GetWindowRect(hwnd, &mut rect); };
-    let w = rect.right - rect.left;
-    let h = rect.bottom - rect.top;
-    let sw = unsafe { GetSystemMetrics(SM_CXSCREEN) };
-    let sh = unsafe { GetSystemMetrics(SM_CYSCREEN) };
-    unsafe {
-        let _ = SetWindowPos(hwnd, None, (sw - w) / 2, (sh - h) / 2, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-    }
-}
-
-fn create_font(name: &str, height: i32, weight: i32) -> HFONT {
-    let name_w = wide(name);
-    unsafe {
-        CreateFontW(
-            height, 0, 0, 0, weight, 0, 0, 0,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-            ((DEFAULT_PITCH.0 as u32) | ((FF_DONTCARE.0 as u32) << 4)) as u32,
-            PCWSTR(name_w.as_ptr()),
-        )
-    }
-}
-
-fn wide(s: &str) -> Vec<u16> {
-    OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
 }
