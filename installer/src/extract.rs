@@ -368,14 +368,63 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
         // Post-commit verification, still inside the transaction (backups are
         // intact). Each committed file was already hash-checked while staging;
         // this re-reads it from its final location to catch any corruption
-        // introduced by the write/rename itself (bad sector, FS glitch). On
-        // mismatch we roll back to the previous version.
+        // introduced by the write/rename itself (bad sector, FS glitch).
         (ctx.on_progress)(total_bytes, total_bytes, "Verifying...");
-        if let Err(e) = verify_committed(&ctx.install_dir, manifest, &to_commit) {
-            common::log::error(format!("post-install verification failed: {e:#} - rolling back"));
+        let mut corrupt = find_corrupt(&ctx.install_dir, manifest, &to_commit);
+
+        // Repair before resorting to a full rollback: every corrupt file's
+        // content is reproducible from the payload (full file in the zip, or a
+        // patch applied to the backed-up previous version), and re-writing to a
+        // fresh staged file + fresh location usually dodges a transient glitch.
+        // Backups are left untouched so a full rollback is still possible if
+        // repair can't make verification pass.
+        if !corrupt.is_empty() {
+            common::log::warn(format!(
+                "{} file(s) failed post-install verification - attempting repair from payload",
+                corrupt.len()
+            ));
+            for attempt in 1..=VERIFY_REPAIR_ATTEMPTS {
+                (ctx.on_progress)(total_bytes, total_bytes, "Repairing...");
+                let repair = repair_corrupt(
+                    ctx.zip_bytes,
+                    ctx.payload.kind,
+                    manifest,
+                    &staged_dir,
+                    &backup_dir,
+                    &ctx.install_dir,
+                    &corrupt,
+                );
+                if let Err(e) = repair {
+                    common::log::error(format!("repair attempt {} failed: {e:#}", attempt));
+                    break;
+                }
+                corrupt = find_corrupt(&ctx.install_dir, manifest, &corrupt);
+                if corrupt.is_empty() {
+                    common::log::info(format!("repair succeeded on attempt {}", attempt));
+                    break;
+                }
+                common::log::warn(format!(
+                    "{} file(s) still corrupt after repair attempt {}",
+                    corrupt.len(),
+                    attempt
+                ));
+            }
+        }
+
+        // Repair exhausted and something is still corrupt - roll back to the
+        // previous version (backups are still intact).
+        if !corrupt.is_empty() {
+            common::log::error(format!(
+                "post-install verification failed for {} file(s) after repair - rolling back",
+                corrupt.len()
+            ));
             rollback(&temp_dir, &ctx.install_dir, &to_commit, &deleted);
             cleanup(&temp_dir);
-            return Err(e).context("installed files failed verification and were rolled back");
+            bail!(
+                "{} installed file(s) failed verification and could not be repaired; \
+                 the install was rolled back to the previous version",
+                corrupt.len()
+            );
         }
         common::log::info(format!("verified {} committed file(s)", to_commit.len()));
 
@@ -399,27 +448,31 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
 }
 
 /// Build the final content for `rel` into `staged_path`, verified by BLAKE3.
-/// Tries an in-place patch (against the existing `dest`) first, falls back to
-/// the full file from the zip. Does not touch `dest`.
+/// Tries an in-place patch (against the existing `old` file) first, falls back
+/// to the full file from the zip. Does not touch `old`.
+///
+/// `old` is normally the live install target (staging), but the repair path
+/// passes the *backup* copy of the previous version instead - both are valid
+/// patch inputs, since the patch was diffed against that previous version.
 fn stage_file(
     archive: &mut ZipArchive<Cursor<&[u8]>>,
     kind: PayloadKind,
     rel: &str,
     entry: &common::models::FileEntry,
-    dest: &Path,
+    old: &Path,
     staged_path: &Path,
 ) -> Result<()> {
-    // Patch path: apply hdiff(old=dest, patch) → staged_path.
+    // Patch path: apply hdiff(old, patch) → staged_path.
     if kind == PayloadKind::Patch {
         if let Some(patch_info) = &entry.patch {
-            if dest.exists() {
+            if old.exists() {
                 let patch_rel = strip_prefix(&patch_info.file, PATCHES_PREFIX)
                     .map(|s| format!("{}{}", PATCHES_PREFIX, s))
                     .unwrap_or_else(|| patch_info.file.clone());
                 if let Ok(patch_bytes) = read_from_zip(archive, &patch_rel) {
                     let patch_tmp = staged_path.with_extension("patch");
                     if fs::write(&patch_tmp, &patch_bytes).is_ok() {
-                        let ok = run_hdiff(dest, &patch_tmp, staged_path);
+                        let ok = run_hdiff(old, &patch_tmp, staged_path);
                         let _ = fs::remove_file(&patch_tmp);
                         if ok && hash_file(staged_path).ok().as_deref() == Some(&entry.hash) {
                             common::log::info(format!("staged (patch): {}", rel));
@@ -803,28 +856,95 @@ fn cleanup(temp_dir: &Path) {
     let _ = fs::remove_dir_all(temp_dir);
 }
 
-/// Re-read each just-committed file from its final location and confirm its
-/// BLAKE3 matches the manifest. Used inside the install transaction.
-fn verify_committed(install_dir: &Path, manifest: &Manifest, committed: &[String]) -> Result<()> {
-    // Re-hashing is independent per file - fan out across cores. `try_for_each`
-    // stops and returns the first corruption it finds.
-    committed.par_iter().try_for_each(|rel| -> Result<()> {
-        let Some(entry) = manifest.files.get(rel) else {
-            return Ok(());
-        };
-        let path = long_path(&install_dir.join(rel));
-        let got = hash_file(&path)
-            .with_context(|| format!("re-read installed file {}", rel))?;
-        if got != entry.hash {
-            bail!(
-                "{} is corrupt after writing (expected {}, got {})",
-                rel,
-                &entry.hash[..16.min(entry.hash.len())],
-                &got[..16.min(got.len())]
-            );
-        }
-        Ok(())
-    })
+/// Re-read each just-committed file from its final location and return the
+/// subset whose BLAKE3 doesn't match the manifest (corrupt, missing, or
+/// unreadable after the write/rename). Re-hashing is independent per file, so
+/// it fans out across cores. Used inside the install transaction.
+fn find_corrupt(install_dir: &Path, manifest: &Manifest, committed: &[String]) -> Vec<String> {
+    committed
+        .par_iter()
+        .filter(|rel| {
+            let Some(entry) = manifest.files.get(*rel) else {
+                return false;
+            };
+            let path = long_path(&install_dir.join(rel));
+            match hash_file(&path) {
+                Ok(got) if got == entry.hash => false,
+                Ok(got) => {
+                    common::log::warn(format!(
+                        "{} corrupt after writing (expected {}, got {})",
+                        rel,
+                        &entry.hash[..16.min(entry.hash.len())],
+                        &got[..16.min(got.len())]
+                    ));
+                    true
+                }
+                Err(e) => {
+                    common::log::warn(format!("{} unreadable after writing: {e:#}", rel));
+                    true
+                }
+            }
+        })
+        .cloned()
+        .collect()
+}
+
+/// Maximum repair passes over the corrupt set before falling back to a full
+/// rollback. A pass re-writes every still-corrupt file from the payload to a
+/// fresh staged file + fresh on-disk location, which clears transient glitches;
+/// a genuinely bad sector that survives this many tries gets a clean rollback.
+const VERIFY_REPAIR_ATTEMPTS: usize = 2;
+
+/// Re-stage each corrupt file from the payload and move it back into place,
+/// WITHOUT disturbing the backups (so a full rollback stays possible if repair
+/// ultimately fails). Each worker opens its own `ZipArchive` view of the
+/// (mmap-backed) payload, exactly like staging.
+///
+/// Patch entries are re-applied against the backed-up previous version, which
+/// `commit_one` saved before the (now-corrupt) overwrite. New files and
+/// full-file entries come straight from `full/<rel>` in the zip.
+fn repair_corrupt(
+    zip_bytes: &[u8],
+    kind: PayloadKind,
+    manifest: &Manifest,
+    staged_dir: &Path,
+    backup_dir: &Path,
+    install_dir: &Path,
+    corrupt: &[String],
+) -> Result<()> {
+    corrupt
+        .par_iter()
+        .map_init(
+            || ZipArchive::new(Cursor::new(zip_bytes)),
+            |archive, rel| -> Result<()> {
+                let Some(entry) = manifest.files.get(rel) else {
+                    return Ok(());
+                };
+                let archive = archive
+                    .as_mut()
+                    .map_err(|e| anyhow::anyhow!("open embedded zip: {e}"))?;
+
+                // Old version (patch input) = the backup taken at commit time.
+                // Absent for brand-new files, whose entry has no patch and is
+                // shipped in full, so `stage_file` falls through to the zip.
+                let old = long_path(&backup_dir.join(staged_name(rel)));
+                let staged_path = staged_dir.join(staged_name(rel));
+                let _ = fs::remove_file(&staged_path);
+                stage_file(archive, kind, rel, entry, &old, &staged_path)
+                    .with_context(|| format!("re-stage {} for repair", rel))?;
+
+                // Overwrite the corrupt file in place. The backup is NOT touched
+                // (it still holds the pre-install version for rollback).
+                let dest = long_path(&install_dir.join(rel));
+                let staged = long_path(&staged_path);
+                move_retry(&staged, &dest)
+                    .with_context(|| format!("repair-install {}", rel))?;
+                common::log::info(format!("repaired {}", rel));
+                Ok(())
+            },
+        )
+        .collect::<Result<Vec<()>>>()
+        .map(|_| ())
 }
 
 /// Diagnostic: re-hash every installed file and report missing / corrupted
@@ -959,6 +1079,71 @@ mod tests {
         assert_eq!(fs::read(app.join("foo.txt")).unwrap(), b"OLD"); // restored
         assert!(!app.join("bar.txt").exists()); // new file removed
         assert!(!temp.exists()); // temp cleaned
+    }
+
+    // Build a one-entry payload zip with `full/<rel>` = `content`, the way the
+    // installer expects to read it back.
+    #[cfg(windows)]
+    fn full_zip(rel: &str, content: &[u8]) -> Vec<u8> {
+        use zip::write::SimpleFileOptions;
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file(
+            format!("{}{}", FULL_PREFIX, rel),
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored),
+        )
+        .unwrap();
+        std::io::Write::write_all(&mut zip, content).unwrap();
+        zip.finish().unwrap().into_inner()
+    }
+
+    // A file that verifies as corrupt after commit is rewritten from the payload
+    // (full file in the zip) instead of triggering a rollback.
+    #[cfg(windows)]
+    #[test]
+    fn repair_rewrites_corrupt_file_from_payload() {
+        let base = tempfile::tempdir().unwrap();
+        let app = base.path().join("app");
+        let temp = app.join(".installer_tmp");
+        let staged = temp.join("staged");
+        let backup = temp.join("backup");
+        fs::create_dir_all(&staged).unwrap();
+        fs::create_dir_all(&backup).unwrap();
+
+        let good = b"GOOD-CONTENT";
+        let zip = full_zip("foo.txt", good);
+
+        // Committed file landed corrupt; manifest expects the good hash.
+        fs::write(app.join("foo.txt"), b"CORRUPTED").unwrap();
+        let mut files = std::collections::HashMap::new();
+        files.insert(
+            "foo.txt".to_string(),
+            common::models::FileEntry {
+                hash: bytes_hash(good),
+                size: good.len() as u64,
+                patch: None,
+            },
+        );
+        let manifest = Manifest {
+            version: "1".into(),
+            exe: String::new(),
+            files,
+            deleted_files: Vec::new(),
+            full_size: good.len() as u64,
+            total_patch_size: 0,
+        };
+
+        let corrupt = find_corrupt(&app, &manifest, &["foo.txt".to_string()]);
+        assert_eq!(corrupt, vec!["foo.txt".to_string()]);
+
+        repair_corrupt(&zip, PayloadKind::Full, &manifest, &staged, &backup, &app, &corrupt)
+            .unwrap();
+
+        assert!(find_corrupt(&app, &manifest, &["foo.txt".to_string()]).is_empty());
+        assert_eq!(fs::read(app.join("foo.txt")).unwrap(), good);
+    }
+
+    fn bytes_hash(b: &[u8]) -> String {
+        blake3::hash(b).to_hex().to_string()
     }
 }
 
