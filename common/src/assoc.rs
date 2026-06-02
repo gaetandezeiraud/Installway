@@ -30,7 +30,6 @@ pub fn normalize_ext(ext: &str) -> String {
     format!(".{}", e)
 }
 
-#[cfg(windows)]
 pub fn register(product: &str, exe_path: &str, assocs: &[FileAssoc]) {
     if assocs.is_empty() {
         return;
@@ -65,7 +64,6 @@ pub fn register(product: &str, exe_path: &str, assocs: &[FileAssoc]) {
     notify_assoc_changed();
 }
 
-#[cfg(windows)]
 pub fn unregister(product: &str, assocs: &[FileAssoc]) {
     if assocs.is_empty() {
         return;
@@ -85,17 +83,10 @@ pub fn unregister(product: &str, assocs: &[FileAssoc]) {
     notify_assoc_changed();
 }
 
-#[cfg(not(windows))]
-pub fn register(_product: &str, _exe_path: &str, _assocs: &[FileAssoc]) {}
-#[cfg(not(windows))]
-pub fn unregister(_product: &str, _assocs: &[FileAssoc]) {}
-
 // ---- Windows registry helpers -------------------------------------------
 
-#[cfg(windows)]
 use windows::Win32::System::Registry::HKEY;
 
-#[cfg(windows)]
 fn create_key(sub: &str) -> Option<HKEY> {
     use windows::Win32::System::Registry::{
         HKEY_CURRENT_USER, KEY_WRITE, REG_OPTION_NON_VOLATILE, RegCreateKeyExW,
@@ -119,7 +110,6 @@ fn create_key(sub: &str) -> Option<HKEY> {
     }
 }
 
-#[cfg(windows)]
 fn set_default(hkey: HKEY, value: &str) {
     use windows::Win32::System::Registry::{REG_SZ, RegSetValueExW};
     use windows::core::PCWSTR;
@@ -132,7 +122,6 @@ fn set_default(hkey: HKEY, value: &str) {
     }
 }
 
-#[cfg(windows)]
 fn close(hkey: HKEY) {
     use windows::Win32::System::Registry::RegCloseKey;
     unsafe {
@@ -140,7 +129,6 @@ fn close(hkey: HKEY) {
     }
 }
 
-#[cfg(windows)]
 fn read_default(sub: &str) -> Option<String> {
     use windows::Win32::System::Registry::{
         HKEY_CURRENT_USER, KEY_READ, REG_VALUE_TYPE, RegCloseKey, RegOpenKeyExW, RegQueryValueExW,
@@ -174,7 +162,6 @@ fn read_default(sub: &str) -> Option<String> {
     }
 }
 
-#[cfg(windows)]
 fn delete_tree(sub: &str) {
     use windows::Win32::System::Registry::{HKEY_CURRENT_USER, RegDeleteTreeW};
     use windows::core::PCWSTR;
@@ -184,7 +171,6 @@ fn delete_tree(sub: &str) {
     }
 }
 
-#[cfg(windows)]
 fn notify_assoc_changed() {
     use windows::Win32::UI::Shell::{SHCNE_ASSOCCHANGED, SHCNF_IDLIST, SHChangeNotify};
     unsafe {

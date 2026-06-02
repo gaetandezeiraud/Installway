@@ -1,5 +1,3 @@
-#![cfg(windows)]
-
 use crate::extract::{InstallCtx, install};
 use crate::install as install_mod;
 use crate::payload::LoadedPayload;

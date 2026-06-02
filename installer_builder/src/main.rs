@@ -1,10 +1,8 @@
 mod args;
 mod embed;
-#[cfg(windows)]
 mod icon;
 mod keygen;
 mod pack;
-#[cfg(windows)]
 mod version;
 
 use anyhow::Result;

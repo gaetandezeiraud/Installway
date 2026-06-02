@@ -4,8 +4,6 @@
 //!
 //! Identical visual style as the installer (Segoe UI, banner strip, ~700×400).
 
-#![cfg(windows)]
-
 use std::cell::RefCell;
 use std::ffi::OsStr;
 use std::os::windows::ffi::{OsStrExt, OsStringExt};

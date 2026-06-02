@@ -3,11 +3,8 @@
 mod extract;
 mod install;
 mod payload;
-#[cfg(windows)]
 mod proc;
-#[cfg(windows)]
 mod ui_minimal;
-#[cfg(windows)]
 mod ui_win32;
 
 use anyhow::{Context, Result};
@@ -44,10 +41,7 @@ fn run() -> Result<()> {
         let path = path_arg(&args, idx)
             .or_else(|| std::env::var("RUSTINSTALLER_PATH").ok())
             .unwrap_or_else(|| default_install_path(&loaded.payload.product).to_string_lossy().into_owned());
-        #[cfg(windows)]
         return ui_minimal::run(loaded, PathBuf::from(path), launch, translator);
-        #[cfg(not(windows))]
-        return run_silent(&loaded, PathBuf::from(path), launch);
     }
 
     if let Some(idx) = args.iter().position(|a| a == "--silent" || a == "/S") {
@@ -88,20 +82,13 @@ fn run() -> Result<()> {
     }
 
     let default_path = default_install_path(&loaded.payload.product);
-
-    #[cfg(windows)]
     ui_win32::run(loaded, default_path, launch, translator)?;
-
-    #[cfg(not(windows))]
-    anyhow::bail!("only Windows is supported");
-
     Ok(())
 }
 
 /// Attach to the parent console so output from this GUI-subsystem binary is
-/// visible. No-op off Windows.
+/// visible.
 fn attach_console() {
-    #[cfg(windows)]
     unsafe {
         use windows::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
         let _ = AttachConsole(ATTACH_PARENT_PROCESS);
@@ -161,7 +148,6 @@ fn default_install_path(product: &str) -> PathBuf {
     PathBuf::from(format!(r"C:\Users\Public\{}", product))
 }
 
-#[cfg(windows)]
 fn report_fatal(msg: &str) {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
@@ -180,9 +166,4 @@ fn report_fatal(msg: &str) {
             MB_OK | MB_ICONERROR,
         );
     }
-}
-
-#[cfg(not(windows))]
-fn report_fatal(msg: &str) {
-    eprintln!("FATAL: {msg}");
 }

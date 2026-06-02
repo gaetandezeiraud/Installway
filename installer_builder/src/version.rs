@@ -6,8 +6,6 @@
 //! The blob is built by hand (no crate does this at runtime) following the
 //! documented VS_VERSIONINFO layout: length-prefixed, 32-bit-aligned nodes.
 
-#![cfg(windows)]
-
 use anyhow::{Context, Result, bail};
 use std::path::Path;
 

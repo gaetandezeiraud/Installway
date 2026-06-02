@@ -61,7 +61,6 @@ fn safe_rel(rel: &str) -> Result<()> {
 /// Prefix `\\?\` to lift the 260-char `MAX_PATH` limit. Requires an absolute,
 /// backslash-only path, so we normalize first. No-op if already prefixed or
 /// unresolvable.
-#[cfg(windows)]
 fn long_path(p: &Path) -> PathBuf {
     let s = p.to_string_lossy();
     if s.starts_with(r"\\?\") {
@@ -82,11 +81,6 @@ fn long_path(p: &Path) -> PathBuf {
     } else {
         PathBuf::from(format!(r"\\?\{}", norm))
     }
-}
-
-#[cfg(not(windows))]
-fn long_path(p: &Path) -> PathBuf {
-    p.to_path_buf()
 }
 
 /// Turn an IO error into a user-friendly message, calling out a full disk.
@@ -139,7 +133,6 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
 
     // Single-instance lock per install dir, so two runs can't race on the temp
     // dirs. OS frees it on exit or crash.
-    #[cfg(windows)]
     let _install_lock = acquire_install_lock(&ctx.install_dir)?;
 
     if ctx.payload.force_reinstall {
@@ -175,7 +168,6 @@ pub fn install(ctx: InstallCtx<'_>) -> Result<()> {
     check_disk_space(&ctx.install_dir, manifest, ctx.payload.kind)?;
 
     // Close any running copy of the target app first (WM_CLOSE, never killed).
-    #[cfg(windows)]
     {
         let pcb = ctx.on_progress.clone();
         crate::proc::ensure_closed(
@@ -491,10 +483,8 @@ fn stage_file(
 /// RAII single-instance lock for one install dir, backed by a named mutex. The
 /// OS destroys it when the last handle closes (exit or crash), so it can never
 /// go stale.
-#[cfg(windows)]
 struct InstallLock(windows::Win32::Foundation::HANDLE);
 
-#[cfg(windows)]
 impl Drop for InstallLock {
     fn drop(&mut self) {
         unsafe {
@@ -503,7 +493,6 @@ impl Drop for InstallLock {
     }
 }
 
-#[cfg(windows)]
 fn acquire_install_lock(install_dir: &Path) -> Result<InstallLock> {
     use windows::Win32::Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError};
     use windows::Win32::System::Threading::CreateMutexW;
@@ -998,7 +987,6 @@ mod tests {
 
     // Power-loss recovery: a commit interrupted with a journal present must
     // roll back to the pre-install state on the next launch.
-    #[cfg(windows)]
     #[test]
     fn recover_rolls_back_from_journal() {
         let base = tempfile::tempdir().unwrap();
@@ -1024,7 +1012,6 @@ mod tests {
 
     // Build a one-entry payload zip with `full/<rel>` = `content`, the way the
     // installer expects to read it back.
-    #[cfg(windows)]
     fn full_zip(rel: &str, content: &[u8]) -> Vec<u8> {
         use zip::write::SimpleFileOptions;
         let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
@@ -1039,7 +1026,6 @@ mod tests {
 
     // A file that verifies as corrupt after commit is rewritten from the payload
     // (full file in the zip) instead of triggering a rollback.
-    #[cfg(windows)]
     #[test]
     fn repair_rewrites_corrupt_file_from_payload() {
         let base = tempfile::tempdir().unwrap();

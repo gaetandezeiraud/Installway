@@ -4,8 +4,6 @@
 //! `WM_CLOSE` to its windows (so the app can prompt to save), and wait for the
 //! user to close it, re-nudging periodically. No-op on a fresh install.
 
-#![cfg(windows)]
-
 use anyhow::{Result, bail};
 use std::path::Path;
 use std::sync::Arc;

@@ -30,7 +30,6 @@ enum Removal {
 /// Schedule `path` for deletion on next reboot. `MoveFileEx(MOVEFILE_DELAY_-
 /// UNTIL_REBOOT)` records the pending rename under HKLM, so it only succeeds
 /// when elevated; `false` otherwise. Best-effort last resort.
-#[cfg(windows)]
 fn schedule_delete_on_reboot(path: &Path) -> bool {
     use std::os::windows::ffi::OsStrExt;
     use windows::Win32::Storage::FileSystem::{MOVEFILE_DELAY_UNTIL_REBOOT, MoveFileExW};
@@ -43,11 +42,6 @@ fn schedule_delete_on_reboot(path: &Path) -> bool {
     unsafe {
         MoveFileExW(PCWSTR(wide.as_ptr()), PCWSTR::null(), MOVEFILE_DELAY_UNTIL_REBOOT).is_ok()
     }
-}
-
-#[cfg(not(windows))]
-fn schedule_delete_on_reboot(_path: &Path) -> bool {
-    false
 }
 
 /// Remove a file, surviving transient AV/indexer locks via the shared retry
@@ -152,7 +146,6 @@ fn walk_dirs(root: &Path) -> Vec<PathBuf> {
     out
 }
 
-#[cfg(windows)]
 pub fn unregister(key: &str) {
     use windows::Win32::System::Registry::{HKEY_CURRENT_USER, RegDeleteTreeW};
     use windows::core::PCWSTR;
@@ -165,9 +158,6 @@ pub fn unregister(key: &str) {
         let _ = RegDeleteTreeW(HKEY_CURRENT_USER, PCWSTR(wide.as_ptr()));
     }
 }
-
-#[cfg(not(windows))]
-pub fn unregister(_key: &str) {}
 
 #[cfg(test)]
 mod tests {

@@ -12,27 +12,18 @@ pub struct LoadedPayload {
     pub uninstaller_bytes: Vec<u8>,
     /// The whole exe, memory-mapped; the payload zip is a slice into it, so
     /// multi-GB payloads stay demand-paged instead of copied into RAM.
-    #[cfg(windows)]
     map: memmap2::Mmap,
-    #[cfg(windows)]
     zip_off: usize,
-    #[cfg(windows)]
     zip_len: usize,
 }
 
 impl LoadedPayload {
     /// Borrowed view of the payload zip (mmap-backed, no heap copy).
-    #[cfg(windows)]
     pub fn zip(&self) -> &[u8] {
         &self.map[self.zip_off..self.zip_off + self.zip_len]
     }
-    #[cfg(not(windows))]
-    pub fn zip(&self) -> &[u8] {
-        &[]
-    }
 }
 
-#[cfg(windows)]
 pub fn load_and_verify() -> Result<LoadedPayload> {
     let signed_bytes = read_resource(2)?;
     let uninstaller_bytes = read_resource(3)?;
@@ -92,15 +83,9 @@ pub fn load_and_verify() -> Result<LoadedPayload> {
     })
 }
 
-#[cfg(not(windows))]
-pub fn load_and_verify() -> Result<LoadedPayload> {
-    bail!("installer is Windows-only")
-}
-
 /// Offset where the PE image ends on disk = max(PointerToRawData + SizeOfRawData)
 /// over all sections. Anything after that (our overlay, then optionally an
 /// Authenticode cert table) is appended data.
-#[cfg(windows)]
 fn pe_overlay_offset(data: &[u8]) -> Result<usize> {
     if data.len() < 0x40 || &data[0..2] != b"MZ" {
         bail!("not a PE (no MZ)");
@@ -172,7 +157,6 @@ fn compare_semver(a: &str, b: &str) -> i32 {
     0
 }
 
-#[cfg(windows)]
 fn read_resource(id: u16) -> Result<Vec<u8>> {
     use windows::Win32::System::LibraryLoader::{
         FindResourceW, GetModuleHandleW, LoadResource, LockResource, SizeofResource,
@@ -218,7 +202,6 @@ mod tests {
         assert!(compare_semver("1.0.1", "1.0.0") > 0);
     }
 
-    #[cfg(windows)]
     #[test]
     fn pe_overlay_offset_minimal() {
         // Minimal PE: MZ, e_lfanew=0x40, "PE\0\0", 1 section, opt header size 0.

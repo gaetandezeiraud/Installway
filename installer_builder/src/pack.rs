@@ -122,7 +122,6 @@ pub fn run(args: &PackArgs) -> Result<()> {
     println!("Stub: {}", stub.display());
 
     // Pull the icon from the packaged exe (best-effort).
-    #[cfg(windows)]
     let icons = {
         let exe_path = args.input.join(&args.exe);
         if exe_path.exists() {
@@ -149,8 +148,6 @@ pub fn run(args: &PackArgs) -> Result<()> {
             None
         }
     };
-    #[cfg(not(windows))]
-    let icons: Option<()> = None;
 
     let uninstaller = match &args.uninstaller {
         Some(p) => {
@@ -169,7 +166,6 @@ pub fn run(args: &PackArgs) -> Result<()> {
     fs::copy(&uninstaller, &staged_uninstaller).with_context(|| {
         format!("stage uninstaller {} -> {}", uninstaller.display(), staged_uninstaller.display())
     })?;
-    #[cfg(windows)]
     if let Some(i) = &icons {
         if let Err(e) = crate::icon::embed_icons(&staged_uninstaller, i) {
             eprintln!("warning: icon embed into uninstaller failed: {e:#}");
@@ -193,14 +189,12 @@ pub fn run(args: &PackArgs) -> Result<()> {
         &uninstaller_bytes,
         zip_bytes.len() as u64,
     )?;
-    #[cfg(windows)]
     if let Some(i) = &icons {
         if let Err(e) = crate::icon::embed_icons(&args.out, i) {
             eprintln!("warning: icon embed into setup failed: {e:#}");
         }
     }
     // Version resource (Explorer Details tab + SmartScreen reputation).
-    #[cfg(windows)]
     if let Err(e) =
         crate::version::embed(&args.out, &args.product, &args.publisher, &args.to_version)
     {

@@ -8,7 +8,6 @@ pub const OVERLAY_MAGIC: &[u8; 8] = b"RIIPLD01";
 /// Embed the small resources via the Win32 resource API: signed manifest
 /// (id=2), uninstaller (id=3), payload length (id=4). The payload zip itself is
 /// appended as a PE overlay by `append_payload` (no size limit, mmap-able).
-#[cfg(windows)]
 pub fn embed_resources(
     exe: &Path,
     signed_json: &[u8],
@@ -74,14 +73,4 @@ pub fn append_payload(exe: &Path, payload_zip: &[u8]) -> Result<()> {
     f.write_all(payload_zip).context("write overlay payload")?;
     f.flush().ok();
     Ok(())
-}
-
-#[cfg(not(windows))]
-pub fn embed_resources(
-    _exe: &Path,
-    _signed_json: &[u8],
-    _uninstaller_exe: &[u8],
-    _payload_len: u64,
-) -> Result<()> {
-    bail!("embed_resources is Windows-only")
 }

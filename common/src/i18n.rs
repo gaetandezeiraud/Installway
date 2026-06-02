@@ -83,7 +83,6 @@ impl Translator {
                 return Self::for_lang(&c);
             }
         }
-        #[cfg(windows)]
         if let Some(c) = os_user_locale() {
             return Self::for_lang(&c);
         }
@@ -126,7 +125,6 @@ impl Default for Translator {
     }
 }
 
-#[cfg(windows)]
 fn os_user_locale() -> Option<String> {
     use windows::Win32::Globalization::GetUserDefaultLocaleName;
     let mut buf = [0u16; 85]; // LOCALE_NAME_MAX_LENGTH

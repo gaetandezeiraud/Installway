@@ -6,8 +6,6 @@
 //! Explorer picks the same icon (no guessing, no rebuilt groups that can
 //! drift). RT_RCDATA (our payload) is a different type, so no collision.
 
-#![cfg(windows)]
-
 use anyhow::{Context, Result, bail};
 use std::cell::RefCell;
 use std::path::Path;

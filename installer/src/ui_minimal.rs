@@ -14,8 +14,6 @@
 //! App icon on the left, text + progress on the right. Closes itself on
 //! success; on failure it stays with the error message.
 
-#![cfg(windows)]
-
 use crate::extract::{InstallCtx, install};
 use crate::payload::LoadedPayload;
 use anyhow::Result;

@@ -62,7 +62,6 @@ pub fn finalize(
         let _ = fs::copy(&src, data_dir.join("install.log"));
     }
 
-    #[cfg(windows)]
     register_uninstall(&info, &uninstaller_path)?;
 
     if !payload.manifest.exe.is_empty() {
@@ -100,7 +99,6 @@ fn registry_key_for(product: &str) -> String {
         .collect()
 }
 
-#[cfg(windows)]
 fn register_uninstall(info: &InstallInfo, uninstaller_path: &Path) -> Result<()> {
     use windows::Win32::System::Registry::{
         HKEY, HKEY_CURRENT_USER, KEY_WRITE, REG_OPTION_NON_VOLATILE, RegCloseKey, RegCreateKeyExW,
@@ -154,7 +152,6 @@ fn register_uninstall(info: &InstallInfo, uninstaller_path: &Path) -> Result<()>
     Ok(())
 }
 
-#[cfg(windows)]
 unsafe fn set_sz(
     hkey: windows::Win32::System::Registry::HKEY,
     name: &str,
@@ -196,7 +193,6 @@ fn days_to_ymd(mut days: i64) -> (i32, u32, u32) {
     (y as i32, m as u32, d as u32)
 }
 
-#[cfg(windows)]
 pub fn launch_product(install_dir: &Path, exe_rel: &str) -> Result<()> {
     use std::os::windows::ffi::OsStrExt;
     use windows::Win32::UI::Shell::ShellExecuteW;
@@ -226,10 +222,5 @@ pub fn launch_product(install_dir: &Path, exe_rel: &str) -> Result<()> {
             SW_SHOWNORMAL,
         );
     }
-    Ok(())
-}
-
-#[cfg(not(windows))]
-pub fn launch_product(_install_dir: &Path, _exe_rel: &str) -> Result<()> {
     Ok(())
 }
