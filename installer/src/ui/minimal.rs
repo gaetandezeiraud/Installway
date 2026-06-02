@@ -47,8 +47,8 @@ const ID_STATUS: usize = 5;
 const STM_SETICON: u32 = 0x0170;
 const SS_ICON: u32 = 0x0003;
 
-const WIN_W: i32 = 480;
-const WIN_H: i32 = 168;
+const WIN_W: i32 = 480; // client width
+const WIN_H: i32 = 140; // client height
 const PAD: i32 = 20;
 const ICON_SZ: i32 = 48;
 const COL_X: i32 = PAD + ICON_SZ + 20; // text column start
@@ -155,16 +155,18 @@ unsafe fn build_window(payload: &common::models::InstallerPayload) -> Result<Win
     STATE.with(|s| *s.borrow_mut() = Some(state));
 
     // No min/max box, fixed small tool-like window (still has close).
+    let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU;
+    let (ww, wh) = helpers::window_size_for_client(WIN_W, WIN_H, style, WINDOW_EX_STYLE(0));
     let hwnd = unsafe {
         CreateWindowExW(
             WINDOW_EX_STYLE(0),
             class_name,
             PCWSTR(title_w.as_ptr()),
-            WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
+            style,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
-            WIN_W,
-            WIN_H,
+            ww,
+            wh,
             None,
             None,
             Some(HINSTANCE(hinstance.0)),

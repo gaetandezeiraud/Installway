@@ -172,15 +172,17 @@ unsafe fn create_window(
         }));
         STATE.with(|s| *s.borrow_mut() = Some(state.clone()));
 
+        let style = WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION | WS_MINIMIZEBOX;
+        let (ww, wh) = helpers::window_size_for_client(WIN_W, WIN_H, style, WINDOW_EX_STYLE(0));
         let hwnd = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             class_name,
             PCWSTR(title.as_ptr()),
-            WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION | WS_MINIMIZEBOX,
+            style,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
-            WIN_W,
-            WIN_H,
+            ww,
+            wh,
             None,
             None,
             Some(HINSTANCE(hinstance.0)),

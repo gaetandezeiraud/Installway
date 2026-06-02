@@ -13,10 +13,10 @@ use windows::Win32::UI::Controls::{
 };
 use windows::Win32::UI::Shell::ExtractIconW;
 use windows::Win32::UI::WindowsAndMessaging::{
-    DispatchMessageW, GetDlgItem, GetMessageW, GetSystemMetrics, GetWindowRect,
+    AdjustWindowRectEx, DispatchMessageW, GetDlgItem, GetMessageW, GetSystemMetrics, GetWindowRect,
     GetWindowTextLengthW, GetWindowTextW, HICON, MSG, PostMessageW, SM_CXSCREEN, SM_CYSCREEN,
-    SWP_NOSIZE, SWP_NOZORDER, SendMessageW, SetWindowPos, SetWindowTextW, TranslateMessage, WM_APP,
-    WM_SETFONT,
+    SWP_NOSIZE, SWP_NOZORDER, SendMessageW, SetWindowPos, SetWindowTextW, TranslateMessage, WINDOW_EX_STYLE,
+    WINDOW_STYLE, WM_APP, WM_SETFONT,
 };
 use windows::core::PCWSTR;
 
@@ -62,6 +62,21 @@ pub unsafe fn own_icon() -> HICON {
         let hmod = GetModuleHandleW(PCWSTR::null()).unwrap_or_default();
         ExtractIconW(Some(HINSTANCE(hmod.0)), PCWSTR(w.as_ptr()), 0)
     }
+}
+
+/// Total window size whose *client area* is `client_w` × `client_h` for the
+/// given styles. Control layout uses client coords, so pass this to
+/// `CreateWindowExW` to get the intended margins (the raw size would be the
+/// outer rect, leaving the client ~16 px narrower / ~39 px shorter).
+pub fn window_size_for_client(
+    client_w: i32,
+    client_h: i32,
+    style: WINDOW_STYLE,
+    ex: WINDOW_EX_STYLE,
+) -> (i32, i32) {
+    let mut r = RECT { left: 0, top: 0, right: client_w, bottom: client_h };
+    let _ = unsafe { AdjustWindowRectEx(&mut r, style, false, ex) };
+    (r.right - r.left, r.bottom - r.top)
 }
 
 /// Center a top-level window on the primary monitor.
