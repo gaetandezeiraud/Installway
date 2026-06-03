@@ -103,22 +103,22 @@ pub fn run(silent: bool) -> Result<()> {
             // 1. Payload files - robust removal (retry locks, then reboot-delete).
             for rel in manifest_owned.files.keys() {
                 let p = app_dir_owned.join(rel);
-                cleanup::remove_one_payload(&p);
                 counter.step(&tr.fmt("uninstall.removing", &[("file", rel)]));
+                cleanup::remove_one_payload(&p);
             }
 
             // 2. Shortcuts + file associations
+            counter.step(&tr.get("uninstall.removing_shortcuts"));
             cleanup::remove_shortcuts(&info_owned.product);
             common::assoc::unregister(&info_owned.product, &info_owned.associations);
-            counter.step(&tr.get("uninstall.removing_shortcuts"));
 
             // 3. App-dir state files (version.json, installer_manifest.json)
-            cleanup::remove_app_state_files(&app_dir_owned);
             counter.step(&tr.get("uninstall.removing_state"));
+            cleanup::remove_app_state_files(&app_dir_owned);
 
             // 4. Empty subdirectories in the app dir
-            cleanup::remove_empty_subdirs(&app_dir_owned);
             counter.report(&tr.get("uninstall.finalizing"));
+            cleanup::remove_empty_subdirs(&app_dir_owned);
 
             // 5. Registry - last so the entry stays visible until cleanup ran.
             cleanup::unregister(&info_owned.registry_key);

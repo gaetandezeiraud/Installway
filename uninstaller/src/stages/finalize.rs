@@ -38,17 +38,16 @@ pub fn run(
         subtitle: tr.get("uninstall.finalize_subtitle"),
         confirm_text: String::new(), // never shown - we auto-advance to Progress
         worker: Box::new(move |progress: Arc<dyn Fn(u64, u64, &str) + Send + Sync>| {
+
+            let counter = StepCounter::new(4, progress);
+            counter.step(&tr.get("uninstall.waiting"));
             let tr = crate::ui::tr();
             // Wait for the uninstall step to exit so file locks release.
             if let Some(pid) = parent_pid {
                 wait_for_pid(pid, Duration::from_secs(10));
             }
 
-            let counter = StepCounter::new(5, progress);
-            counter.step(&tr.get("uninstall.waiting"));
-            counter.step(&tr.get("uninstall.removing_uninstaller"));
-            counter.step(&tr.get("uninstall.removing_state2"));
-
+            counter.step(&tr.get("uninstall.removing_install_dir"));
             // Remove the application dir (may be empty / already gone).
             if !app_dir_w.as_os_str().is_empty() {
                 remove_dir_retry(&app_dir_w);
@@ -64,8 +63,8 @@ pub fn run(
                     let _ = fs::remove_dir(grand); // "<publisher>"
                 }
             }
-            counter.step(&tr.get("uninstall.removing_install_dir"));
 
+            counter.step(&tr.get("uninstall.schedule_deletion"));
             // Schedule self for deletion on next reboot (no cmd, no flash).
             schedule_self_delete_on_reboot();
             common::log::info("finalize complete; self scheduled for delete-on-reboot");
