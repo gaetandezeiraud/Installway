@@ -114,7 +114,12 @@ pub fn remove_payload_files(install_dir: &Path, manifest: &Manifest) -> usize {
 
 pub fn remove_shortcuts(product: &str) {
     for p in common::shortcuts::paths_for(product) {
-        let _ = remove_file_robust(&p);
+        match remove_file_robust(&p) {
+            Removal::Absent => common::log::warn(format!("could not remove shortcut (absent): {}", p.display())),
+            Removal::Removed => {},
+            Removal::Pending => common::log::warn(format!("shortcut deletion will be delayed for next reboot: {}", p.display())),
+            Removal::Stuck => common::log::warn(format!("could not remove shortcut (locked): {}", p.display())),
+        }
     }
 }
 
