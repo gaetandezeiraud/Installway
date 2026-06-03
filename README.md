@@ -100,6 +100,48 @@ A patch installer carries only the deltas (or the full bytes for files where
 the delta would be bigger) plus the list of files to delete. Unchanged files
 have no payload entry at all.
 
+### Config file (`--config`)
+
+`pack` takes a long command line. Put any options in a TOML file instead and
+pass `--config`. **CLI args override the file**; anything absent from both uses
+the built-in default (only `min_installer_version` has one: `1.0.0`).
+
+Flat keys, snake_case, matching the CLI long names. Unknown keys are rejected
+(typo guard). Booleans (`force_reinstall`, `reuse_stub`) are `true`/`false`;
+`assoc` is an array. A CLI `--assoc` list *replaces* the file's list when given.
+
+```toml
+# pack.toml
+product    = "myapp"
+publisher  = "My Company"
+to_version = "1.0"
+input      = "build/myapp-1.0"
+exe        = "myapp.exe"
+license    = "legal/EULA-myapp-en.txt"
+assoc      = [".myx:MyApp Document", ".myz:MyApp Archive"]
+priv_key   = "keys/priv.key"
+pub_key    = "keys/pub.key"
+out        = "dist/setup-myapp-1.0.exe"
+
+# patch mode (optional)
+# from_version = "0.9"
+# from_dir     = "build/myapp-0.9"
+
+# dev (optional)
+# force_reinstall = true
+```
+
+```pwsh
+# everything from the file
+.\target\release\installer_builder.exe pack --config .\pack.toml
+
+# file as a base, override one value on the CLI
+.\target\release\installer_builder.exe pack --config .\pack.toml --to-version 1.1
+```
+
+Required (via CLI or file): `product`, `publisher`, `to-version`, `input`,
+`exe`, `priv-key`, `out`. A missing one fails with a message naming it.
+
 ### Dev: reinstall from scratch
 
 Add `--force-reinstall` to any build (full or patch):
