@@ -123,6 +123,13 @@ priv_key   = "keys/priv.key"
 pub_key    = "keys/pub.key"
 out        = "dist/setup-myapp-1.0.exe"
 
+# default install dir the UI proposes (per-app); %VAR% tokens are expanded.
+default_install_dir = "%LOCALAPPDATA%\\Programs\\MyApp"
+
+# trim the wizard (optional)
+# skip_license = true   # hide the License page
+# skip_path    = true   # hide the Choose-location page, install to default_install_dir
+
 # patch mode (optional)
 # from_version = "0.9"
 # from_dir     = "build/myapp-0.9"
@@ -212,6 +219,14 @@ Double-click the `.exe`. The wizard walks through:
 
 No admin elevation (manifest declares `asInvoker`). Segoe UI font, Common
 Controls v6 visual styles, DPI-aware (`PerMonitorV2`).
+
+**Trimming the wizard.** `--skip-license` hides step 1; `--skip-path` hides
+step 2 (installs to the default location, no picker). With both, the wizard goes
+straight to Progress on launch. With `--skip-path` only, the License page's
+button becomes "Install". The proposed location comes from `--default-install-dir`
+(per-app, `%VAR%` tokens expanded, e.g. `%LOCALAPPDATA%\Programs\MyApp`), falling
+back to `%LOCALAPPDATA%\Programs\<product>`. All three are `pack` options (CLI or
+`--config`).
 
 ### Minimal (app-triggered self-update)
 

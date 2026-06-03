@@ -62,6 +62,17 @@ pub struct InstallerPayload {
     /// (skip patch from-version check, rewrite all files, remove orphans).
     #[serde(default)]
     pub force_reinstall: bool,
+    /// Hide the License page in the interactive UI.
+    #[serde(default)]
+    pub skip_license: bool,
+    /// Hide the Choose-location page; install straight to the default path.
+    #[serde(default)]
+    pub skip_path: bool,
+    /// Default install directory the UI proposes, set per-app at build time.
+    /// May contain `%VAR%` env tokens (e.g. `%LOCALAPPDATA%\Programs\MyApp`).
+    /// `None` falls back to `%LOCALAPPDATA%\Programs\<product>`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_install_dir: Option<String>,
 }
 
 /// One file-type association: extension + a human description.
@@ -159,11 +170,17 @@ mod tests {
             license_text: None,
             associations: vec![FileAssoc { ext: ".x".into(), description: "X".into() }],
             force_reinstall: true,
+            skip_license: true,
+            skip_path: false,
+            default_install_dir: Some(r"%LOCALAPPDATA%\Programs\P".into()),
         };
         let s = serde_json::to_string(&p).unwrap();
         let back: InstallerPayload = serde_json::from_str(&s).unwrap();
         assert_eq!(back.publisher, "Pub");
         assert!(back.force_reinstall);
+        assert!(back.skip_license);
+        assert!(!back.skip_path);
+        assert_eq!(back.default_install_dir.as_deref(), Some(r"%LOCALAPPDATA%\Programs\P"));
         assert_eq!(back.associations.len(), 1);
         assert_eq!(back.from_version.as_deref(), Some("1.0"));
     }

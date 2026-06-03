@@ -82,6 +82,19 @@ pub struct PackCli {
     #[arg(long)]
     pub force_reinstall: bool,
 
+    /// Hide the License page in the interactive installer.
+    #[arg(long)]
+    pub skip_license: bool,
+
+    /// Hide the Choose-location page; install straight to the default path.
+    #[arg(long)]
+    pub skip_path: bool,
+
+    /// Default install dir the UI proposes (per-app). May contain `%VAR%` env
+    /// tokens, e.g. `%LOCALAPPDATA%\Programs\MyApp` or `C:\Games\MyApp`.
+    #[arg(long, value_name = "DIR")]
+    pub default_install_dir: Option<String>,
+
     /// Path to the Ed25519 private key file.
     #[arg(long)]
     pub priv_key: Option<PathBuf>,
@@ -126,6 +139,11 @@ pub struct PackFile {
     pub min_installer_version: Option<String>,
     #[serde(default)]
     pub force_reinstall: bool,
+    #[serde(default)]
+    pub skip_license: bool,
+    #[serde(default)]
+    pub skip_path: bool,
+    pub default_install_dir: Option<String>,
     pub priv_key: Option<PathBuf>,
     pub pub_key: Option<PathBuf>,
     pub installer_stub: Option<PathBuf>,
@@ -149,6 +167,9 @@ pub struct PackArgs {
     pub assoc: Vec<String>,
     pub min_installer_version: String,
     pub force_reinstall: bool,
+    pub skip_license: bool,
+    pub skip_path: bool,
+    pub default_install_dir: Option<String>,
     pub priv_key: PathBuf,
     pub pub_key: Option<PathBuf>,
     pub installer_stub: Option<PathBuf>,
@@ -184,6 +205,7 @@ impl PackArgs {
             from_dir: cli.from_dir.or(file.from_dir),
             from_version: cli.from_version.or(file.from_version),
             license: cli.license.or(file.license),
+            default_install_dir: cli.default_install_dir.or(file.default_install_dir),
             pub_key: cli.pub_key.or(file.pub_key),
             installer_stub: cli.installer_stub.or(file.installer_stub),
             uninstaller: cli.uninstaller.or(file.uninstaller),
@@ -196,6 +218,8 @@ impl PackArgs {
                 .unwrap_or_else(|| "1.0.0".to_string()),
             // Boolean flags: either source can turn them on.
             force_reinstall: cli.force_reinstall || file.force_reinstall,
+            skip_license: cli.skip_license || file.skip_license,
+            skip_path: cli.skip_path || file.skip_path,
             reuse_stub: cli.reuse_stub || file.reuse_stub,
         })
     }
@@ -219,6 +243,9 @@ mod tests {
             assoc: Vec::new(),
             min_installer_version: None,
             force_reinstall: false,
+            skip_license: false,
+            skip_path: false,
+            default_install_dir: None,
             priv_key: None,
             pub_key: None,
             installer_stub: None,

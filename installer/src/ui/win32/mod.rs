@@ -86,7 +86,16 @@ thread_local! {
     pub(super) static PAYLOAD: RefCell<Option<common::models::InstallerPayload>> = RefCell::new(None);
     pub(super) static UNINSTALLER: RefCell<Option<Vec<u8>>> = RefCell::new(None);
     pub(super) static LAUNCH_FLAG: RefCell<bool> = RefCell::new(false);
+    pub(super) static SKIP_LICENSE: RefCell<bool> = RefCell::new(false);
+    pub(super) static SKIP_PATH: RefCell<bool> = RefCell::new(false);
     static T: RefCell<common::i18n::Translator> = RefCell::new(common::i18n::Translator::default());
+}
+
+fn skip_license() -> bool {
+    SKIP_LICENSE.with(|s| *s.borrow())
+}
+fn skip_path() -> bool {
+    SKIP_PATH.with(|s| *s.borrow())
 }
 
 pub(super) fn tr() -> common::i18n::Translator {
@@ -102,12 +111,25 @@ pub fn run(
     PAYLOAD.with(|p| *p.borrow_mut() = Some(loaded.payload.clone()));
     UNINSTALLER.with(|u| *u.borrow_mut() = Some(loaded.uninstaller_bytes.clone()));
     LAUNCH_FLAG.with(|l| *l.borrow_mut() = launch_flag);
+    SKIP_LICENSE.with(|s| *s.borrow_mut() = loaded.payload.skip_license);
+    SKIP_PATH.with(|s| *s.borrow_mut() = loaded.payload.skip_path);
     T.with(|t| *t.borrow_mut() = translator);
+
+    let skip_license = loaded.payload.skip_license;
+    let skip_path = loaded.payload.skip_path;
 
     unsafe {
         let hwnd = create_window(&loaded.payload, &default_path)?;
-        apply_phase(hwnd, Phase::License);
-        let _ = ShowWindow(hwnd, SW_SHOW);
+        // Pick the first non-skipped page; if both are skipped there is no user
+        // step, so install immediately to the default path.
+        if skip_license && skip_path {
+            apply_phase(hwnd, Phase::Progress);
+            let _ = ShowWindow(hwnd, SW_SHOW);
+            handlers::on_install(hwnd);
+        } else {
+            apply_phase(hwnd, if skip_license { Phase::Choose } else { Phase::License });
+            let _ = ShowWindow(hwnd, SW_SHOW);
+        }
         helpers::pump_messages();
     }
     Ok(())
@@ -289,11 +311,17 @@ pub(super) unsafe fn apply_phase(hwnd: HWND, phase: Phase) {
     show(ID_STATUS, phase == Phase::Progress || phase == Phase::Done || phase == Phase::Error);
     show(ID_LAUNCH_CHK, phase == Phase::Done);
 
-    show(ID_BACK_BTN, phase == Phase::Choose);
+    show(ID_BACK_BTN, phase == Phase::Choose && !skip_license());
     show(ID_NEXT_BTN, phase == Phase::License);
     show(ID_INSTALL_BTN, phase == Phase::Choose);
     show(ID_CANCEL_BTN, phase == Phase::License || phase == Phase::Choose || phase == Phase::Progress);
     show(ID_CLOSE_BTN, phase == Phase::Done || phase == Phase::Error);
+
+    // With no Choose page, the License "Next" is really the install trigger.
+    if phase == Phase::License {
+        let label = if skip_path() { "install.install" } else { "install.next" };
+        unsafe { helpers::set_dlg_text(hwnd, ID_NEXT_BTN, &tr().get(label)) };
+    }
 
     if phase == Phase::Done {
         unsafe {

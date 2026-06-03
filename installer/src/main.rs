@@ -51,14 +51,14 @@ fn run() -> Result<()> {
     if let Some(idx) = args.iter().position(|a| a == "--minimal" || a == "/minimal") {
         let path = path_arg(&args, idx)
             .or_else(|| std::env::var("RUSTINSTALLER_PATH").ok())
-            .unwrap_or_else(|| default_install_path(&loaded.payload.product).to_string_lossy().into_owned());
+            .unwrap_or_else(|| default_install_path(&loaded.payload).to_string_lossy().into_owned());
         return ui::minimal::run(loaded, PathBuf::from(path), launch, translator);
     }
 
     if let Some(idx) = args.iter().position(|a| a == "--silent" || a == "/S") {
         let path = path_arg(&args, idx)
             .or_else(|| std::env::var("RUSTINSTALLER_PATH").ok())
-            .unwrap_or_else(|| default_install_path(&loaded.payload.product).to_string_lossy().into_owned());
+            .unwrap_or_else(|| default_install_path(&loaded.payload).to_string_lossy().into_owned());
         return run_silent(&loaded, PathBuf::from(path), launch);
     }
     // Diagnostic: re-hash installed files against the manifest in the data dir.
@@ -92,7 +92,7 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
-    let default_path = default_install_path(&loaded.payload.product);
+    let default_path = default_install_path(&loaded.payload);
     ui::win32::run(loaded, default_path, launch, translator)?;
     Ok(())
 }
@@ -148,8 +148,17 @@ fn path_arg(args: &[String], flag_idx: usize) -> Option<String> {
         .cloned()
 }
 
-fn default_install_path(product: &str) -> PathBuf {
-    // User-local path, no admin needed.
+fn default_install_path(payload: &common::models::InstallerPayload) -> PathBuf {
+    // Per-app default from the build (env tokens expanded), if set.
+    if let Some(dir) = payload.default_install_dir.as_deref() {
+        let expanded = expand_env(dir);
+        let trimmed = expanded.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
+    // Else a user-local path, no admin needed.
+    let product = &payload.product;
     if let Some(local) = std::env::var_os("LOCALAPPDATA") {
         return PathBuf::from(local).join("Programs").join(product);
     }
@@ -157,6 +166,26 @@ fn default_install_path(product: &str) -> PathBuf {
         return PathBuf::from(home).join(product);
     }
     PathBuf::from(format!(r"C:\Users\Public\{}", product))
+}
+
+/// Expand `%VAR%` tokens via Win32 (handles `%LOCALAPPDATA%` etc.). Returns the
+/// input unchanged on failure.
+fn expand_env(s: &str) -> String {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::Win32::System::Environment::ExpandEnvironmentStringsW;
+    use windows::core::PCWSTR;
+    let src: Vec<u16> = std::ffi::OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect();
+    let needed = unsafe { ExpandEnvironmentStringsW(PCWSTR(src.as_ptr()), None) };
+    if needed == 0 {
+        return s.to_string();
+    }
+    let mut buf = vec![0u16; needed as usize];
+    let written = unsafe { ExpandEnvironmentStringsW(PCWSTR(src.as_ptr()), Some(&mut buf)) };
+    if written == 0 {
+        return s.to_string();
+    }
+    let n = (written as usize).saturating_sub(1).min(buf.len()); // drop trailing null
+    String::from_utf16_lossy(&buf[..n])
 }
 
 fn report_fatal(msg: &str) {

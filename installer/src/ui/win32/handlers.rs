@@ -30,13 +30,18 @@ pub(super) unsafe fn on_next(hwnd: HWND) {
             unsafe { message_box(hwnd, &tr().get("install.must_accept"), MB_ICONWARNING) };
             return;
         }
-        unsafe { apply_phase(hwnd, Phase::Choose) };
+        // No Choose page: "Next" installs straight away to the default path.
+        if super::skip_path() {
+            unsafe { on_install(hwnd) };
+        } else {
+            unsafe { apply_phase(hwnd, Phase::Choose) };
+        }
     }
 }
 
 pub(super) unsafe fn on_back(hwnd: HWND) {
     let phase = STATE.with(|s| s.borrow().as_ref().map(|st| st.borrow().phase).unwrap_or(Phase::License));
-    if phase == Phase::Choose {
+    if phase == Phase::Choose && !super::skip_license() {
         unsafe { apply_phase(hwnd, Phase::License) };
     }
 }
