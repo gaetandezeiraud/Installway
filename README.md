@@ -223,10 +223,29 @@ Controls v6 visual styles, DPI-aware (`PerMonitorV2`).
 **Trimming the wizard.** `--skip-license` hides step 1; `--skip-path` hides
 step 2 (installs to the default location, no picker). With both, the wizard goes
 straight to Progress on launch. With `--skip-path` only, the License page's
-button becomes "Install". The proposed location comes from `--default-install-dir`
-(per-app, `%VAR%` tokens expanded, e.g. `%LOCALAPPDATA%\Programs\MyApp`), falling
-back to `%LOCALAPPDATA%\Programs\<product>`. All three are `pack` options (CLI or
-`--config`).
+button becomes "Install". `--default-install-dir` / `--skip-license` /
+`--skip-path` are all `pack` options (CLI or `--config`).
+
+**Already installed?** When a prior install of this product is found (its
+`installer_info.json` in the per-user data dir), the installer treats this as a
+reinstall/upgrade and **skips the Choose-location page entirely** - for both
+full and patch installers - installing into the existing folder. A patch *must*
+go there (it `hdiff`s the files already on disk), and a full reinstall there
+avoids an accidental second copy in another folder. The build-time `--skip-path`
+only matters for *first* installs.
+
+**Proposed location, in priority order:**
+
+1. An explicit path argument (`--silent`/`--minimal "<dir>"` or `RUSTINSTALLER_PATH`).
+2. **The folder the product was last installed to** (reinstall/upgrade lands in
+   place; the Choose page is skipped as above).
+3. The build's `--default-install-dir` (per-app, `%VAR%` tokens expanded, e.g.
+   `%LOCALAPPDATA%\Programs\MyApp`).
+4. `%LOCALAPPDATA%\Programs\<product>`.
+
+Detection is keyed by `publisher` + `product`, so it works across versions. A
+fresh install (nothing recorded) shows the Choose page as normal (unless the
+build set `--skip-path`).
 
 ### Minimal (app-triggered self-update)
 

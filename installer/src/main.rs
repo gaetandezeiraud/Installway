@@ -92,8 +92,10 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
-    let default_path = default_install_path(&loaded.payload);
-    ui::win32::run(loaded, default_path, launch, translator)?;
+    let prior = previous_install_dir(&loaded.payload);
+    let already_installed = prior.is_some();
+    let default_path = prior.unwrap_or_else(|| default_install_path(&loaded.payload));
+    ui::win32::run(loaded, default_path, launch, already_installed, translator)?;
     Ok(())
 }
 
@@ -149,6 +151,11 @@ fn path_arg(args: &[String], flag_idx: usize) -> Option<String> {
 }
 
 fn default_install_path(payload: &common::models::InstallerPayload) -> PathBuf {
+    // Already installed? Propose the same folder so a reinstall/update lands in
+    // place (the user can still change it on the Choose page).
+    if let Some(prev) = previous_install_dir(payload) {
+        return prev;
+    }
     // Per-app default from the build (env tokens expanded), if set.
     if let Some(dir) = payload.default_install_dir.as_deref() {
         let expanded = expand_env(dir);
@@ -166,6 +173,20 @@ fn default_install_path(payload: &common::models::InstallerPayload) -> PathBuf {
         return PathBuf::from(home).join(product);
     }
     PathBuf::from(format!(r"C:\Users\Public\{}", product))
+}
+
+/// The folder this product was last installed to, read from `installer_info.json`
+/// in the per-user data dir. `None` if never installed or the record is missing
+/// / empty.
+fn previous_install_dir(payload: &common::models::InstallerPayload) -> Option<PathBuf> {
+    let data_dir = common::paths::uninstall_dir(&payload.publisher, &payload.product)?;
+    let text = std::fs::read_to_string(data_dir.join("installer_info.json")).ok()?;
+    let info: common::models::InstallInfo = serde_json::from_str(&text).ok()?;
+    if info.install_dir.trim().is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(info.install_dir))
+    }
 }
 
 /// Expand `%VAR%` tokens via Win32 (handles `%LOCALAPPDATA%` etc.). Returns the

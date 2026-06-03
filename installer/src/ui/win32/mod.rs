@@ -106,17 +106,22 @@ pub fn run(
     loaded: LoadedPayload,
     default_path: PathBuf,
     launch_flag: bool,
+    already_installed: bool,
     translator: common::i18n::Translator,
 ) -> Result<()> {
+    // An existing install fixes the target folder: a patch must go there, and a
+    // full reinstall/upgrade should too (no accidental second copy). So the
+    // Choose page is always skipped when already installed, regardless of the
+    // build-time `skip_path`. `default_path` is already the prior folder.
+    let skip_license = loaded.payload.skip_license;
+    let skip_path = loaded.payload.skip_path || already_installed;
+
     PAYLOAD.with(|p| *p.borrow_mut() = Some(loaded.payload.clone()));
     UNINSTALLER.with(|u| *u.borrow_mut() = Some(loaded.uninstaller_bytes.clone()));
     LAUNCH_FLAG.with(|l| *l.borrow_mut() = launch_flag);
-    SKIP_LICENSE.with(|s| *s.borrow_mut() = loaded.payload.skip_license);
-    SKIP_PATH.with(|s| *s.borrow_mut() = loaded.payload.skip_path);
+    SKIP_LICENSE.with(|s| *s.borrow_mut() = skip_license);
+    SKIP_PATH.with(|s| *s.borrow_mut() = skip_path);
     T.with(|t| *t.borrow_mut() = translator);
-
-    let skip_license = loaded.payload.skip_license;
-    let skip_path = loaded.payload.skip_path;
 
     unsafe {
         let hwnd = create_window(&loaded.payload, &default_path)?;
