@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 //! Control construction for each wizard view. All controls are created up front
 //! and shown/hidden per phase by [`super::apply_phase`].
 

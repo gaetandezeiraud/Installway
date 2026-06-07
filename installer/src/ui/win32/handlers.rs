@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 //! Button and worker logic for the wizard. `wndproc` dispatches `WM_COMMAND`
 //! here; the install runs on a worker thread that posts progress/done/error
 //! back to the UI thread.

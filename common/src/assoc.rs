@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 //! File-type associations under `HKCU\Software\Classes` (per-user, no admin).
 //!
 //! Layout written per association (extension `.myx`, product `MyApp`):

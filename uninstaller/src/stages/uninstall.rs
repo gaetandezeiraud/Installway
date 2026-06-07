@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 //! Uninstall step: runs from `<install_dir>\uninstall.exe`. Shows confirm dialog,
 //! then does the bulk of cleanup (files, shortcuts, registry, empty subdirs).
 //! When done, copies itself into `%TEMP%` and spawns the finalize step, then exits

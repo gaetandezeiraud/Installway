@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 use anyhow::{Context, Result, bail};
 use common::models::{InstallerPayload, Manifest, PayloadKind};
 use hdiffpatch_rs::patchers::HDiff;

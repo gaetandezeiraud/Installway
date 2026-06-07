@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 use anyhow::{Context, Result};
 use common::models::{InstallInfo, InstallerPayload};
 use std::fs;

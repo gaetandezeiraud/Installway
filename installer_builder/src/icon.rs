@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 //! Copy the icon resources from the packaged exe into the installer and
 //! uninstaller .exe so Explorer shows the right thumbnail.
 //!

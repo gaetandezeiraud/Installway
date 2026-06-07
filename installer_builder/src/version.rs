@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 //! Build + embed a Win32 `VS_VERSIONINFO` (RT_VERSION) resource into the
 //! output setup.exe so Explorer's Details tab shows FileVersion /
 //! ProductVersion / Company / Description, and SmartScreen sees a complete,

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 use crate::args::PackArgs;
 use crate::embed;
 use anyhow::{Context, Result, bail};

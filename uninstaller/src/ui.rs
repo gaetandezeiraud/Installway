@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 //! Win32 UI for the uninstaller. Two phases sharing one HWND:
 //!   - `Confirm` - title + product info + Yes / No buttons
 //!   - `Progress` - title + progress bar + status label

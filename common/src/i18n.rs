@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 //! Multi-language string lookup.
 //!
 //! Locales are TOML files under `common/locales/`, embedded at compile time

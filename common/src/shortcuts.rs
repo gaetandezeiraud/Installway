@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 //! Per-user shortcut paths (Desktop + Start Menu).
 //!
 //! Same layout the launcher uses so behaviour matches across both tools.

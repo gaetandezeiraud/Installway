@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 //! Close a running copy of the app we are about to install over.
 //!
 //! Never force-terminates: find every process running the target exe, post

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 //! Finalize step: runs from `%TEMP%` after the uninstall step spawned us. Waits for
 //! the uninstall step to exit (releasing the `uninstall.exe` lock), removes the app
 //! dir and data dir, then schedules its own removal via

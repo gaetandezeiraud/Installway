@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 //! Compact, auto-starting update UI for app-triggered self-updates.
 //!
 //! No license page, no path picker, no Install button - it starts immediately

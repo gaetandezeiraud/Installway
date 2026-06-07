@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 use crate::args::KeygenArgs;
 use anyhow::{Context, Result};
 use ed25519_dalek::SigningKey;

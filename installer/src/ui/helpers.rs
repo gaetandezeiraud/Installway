@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 //! Shared Win32 helpers used by both installer UIs (full wizard + minimal updater).
 
 use std::ffi::{OsStr, OsString};

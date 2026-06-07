@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 //! Full installer wizard. Phases: License → Choose → Progress → Done/Error.
 //!
 //! `mod.rs` owns the window, shared state, message loop and phase switching;

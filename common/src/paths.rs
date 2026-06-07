@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Gaëtan Dezeiraud, Louis Pinaud
+
 //! Per-user install-metadata paths.
 //!
 //! The uninstaller and its `installer_info.json` / `installer_manifest.json`
