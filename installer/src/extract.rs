@@ -794,7 +794,7 @@ fn strip_prefix<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
 }
 
 fn cleanup(temp_dir: &Path) {
-    let _ = fs::remove_dir_all(temp_dir);
+    let _ = common::utils::remove_dir_retry(temp_dir);
 }
 
 /// Re-hash each committed file and return those that don't match the manifest
